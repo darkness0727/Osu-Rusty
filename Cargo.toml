@@ -1,0 +1,23 @@
+[package]
+name = "discord-osu-bot"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dotenvy = "0.15.7"
+num-format = "0.4.4"
+num-traits = "0.2.19"
+once_cell = "1.21.3"
+poise_macros = { version = "0.6.1" }
+poise = { git = "https://github.com/serenity-rs/poise", version = "0.6.1" }
+rosu-v2 = "0.11.0"
+serenity = "0.12.4"
+time = "0.3.44"
+timeago = "0.5.0"
+tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1.41"
+rosu-pp = "3.1.0"
+reqwest = "0.12.24"
+bytes = "1.10.1"
+strum = "0.27.2"
+strum_macros = "0.27.2"

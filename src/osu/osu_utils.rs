@@ -60,14 +60,14 @@ pub fn map_max_stats(beatmap: &Beatmap, mods: GameMods) -> MapMaxStatsResult {
         .calculate();
 
     let stars = diff_attrs.stars;
-    let map_max_combo = diff_attrs.max_combo;
-    let max_pp = perf_attrs.pp();
+    let combo = diff_attrs.max_combo;
+    let pp = perf_attrs.pp();
 
     MapMaxStatsResult {
         perf_attrs,
         stars,
-        combo: map_max_combo,
-        pp: max_pp,
+        combo,
+        pp,
     }
 }
 

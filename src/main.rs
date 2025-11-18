@@ -6,7 +6,7 @@ use serenity::prelude::*;
 
 use crate::{
     commands::{profile::profile, recent::recent},
-    osu::login::login,
+    osu::login::login, resource_handler::create_all_dir,
 };
 
 mod commands {
@@ -22,6 +22,7 @@ mod embeds {
     pub mod recent_embed;
 }
 pub mod utils;
+pub mod resource_handler;
 
 // Types used by all command functions
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -33,6 +34,7 @@ pub static FAIL_EMBED_COLOR: i32 = 0xFF0000;
 pub static DEFAULT_EMBED_COLOR: i32 = 0x57697d;
 #[tokio::main]
 async fn main() {
+    _ = create_all_dir();
     osu_login().await;
     start_discord_bot().await;
 }

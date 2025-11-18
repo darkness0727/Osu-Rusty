@@ -1,20 +1,54 @@
-use crate::{Error, FAIL_EMBED_COLOR};
+use crate::{
+    Error, FAIL_EMBED_COLOR,
+    resource_handler::{ResourceCategory, get_resource_path, remove_resource, save_resource},
+};
 use bytes::Bytes;
 use num_format::{Locale, ToFormattedString};
 use num_traits::{Float, clamp_min};
 use poise::{Context as PoiseContext, CreateReply};
+use rosu_pp::Beatmap;
 use rosu_v2::prelude::{GameMod, GameMods};
 use serenity::{
     Result as SerenityResult,
     all::{CreateAllowedMentions, CreateEmbed},
 };
-use std::{collections::HashMap, fs::File, io::Write, time::Duration};
+use std::{fs::File, io::Write, time::Duration};
 use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
 
 pub static BPM_EMOJI: &str = "<:bpm:1437855552100368384>";
 
-pub fn format_hits(n300: u32, n100: u32, n50: u32, miss: u32) -> String{
+pub async fn save_map_osu_file(map_id: u32) -> Result<String, Error> {
+    let file_name = format!("{}.osu", map_id);
+
+    if let Some(path) = get_resource_path(ResourceCategory::MapData, &file_name) {
+        return Ok(path);
+    }
+
+    let map_data_url = map_osu_file_url(map_id);
+    let map_response = reqwest::get(&map_data_url).await?;
+    let map_data = map_response.bytes().await?;
+    let path = save_resource(ResourceCategory::MapData, &file_name, map_data)?;
+    Ok(path)
+}
+
+pub fn get_beatmap_locally(map_id: u32) -> Result<Beatmap, Error> {
+    let file_name = format!("{}.osu", map_id);
+
+    let path =
+        get_resource_path(ResourceCategory::MapData, &file_name).ok_or("beatmap not found")?;
+
+    rosu_pp::Beatmap::from_path(path).map_err(|err| {
+        let _ = remove_resource(ResourceCategory::MapData, &file_name);
+        format!("{}\nbeatmap file likely corrupted, file removed", err).into()
+    })
+}
+
+pub fn map_osu_file_url(map_id: u32) -> String {
+    format!("https://osu.ppy.sh/osu/{}", map_id)
+}
+
+pub fn format_hits(n300: u32, n100: u32, n50: u32, miss: u32) -> String {
     format!("{{{}/{}/{}/{}}}", n300, n100, n50, miss)
 }
 
@@ -22,7 +56,10 @@ pub fn is_classic(mods: &GameMods) -> bool {
     mods.iter().any(|m| matches!(m, &GameMod::ClassicOsu(_)))
 }
 
-/// THIS FUNCTION IS WRITTEN BY CHATGPT BECAUSE IDK HOW TO
+
+/// Color spectrum interpolation for star rating.
+/// This function was written by ChatGPT and I have ZERO idea of 
+/// whats actually happening but if its works it works 
 pub fn star_color_spectrum(stars: f32) -> i32 {
     const D: [f32; 11] = [0.1, 1.25, 2.0, 2.5, 3.3, 4.2, 4.9, 5.8, 6.7, 7.7, 9.0];
     const C: [(u8, u8, u8); 11] = [
@@ -41,12 +78,20 @@ pub fn star_color_spectrum(stars: f32) -> i32 {
 
     let s = stars.clamp(D[0], D[10]);
 
-    let mut i = 0;
-    while i < 10 && !(s >= D[i] && s <= D[i + 1]) {
-        i += 1;
+    let mut i = 0usize;
+    for idx in 0..(D.len() - 1) {
+        if s >= D[idx] && s <= D[idx + 1] {
+            i = idx;
+            break;
+        }
     }
 
-    let t = (s - D[i]) / (D[i + 1] - D[i]);
+    let denom = D[i + 1] - D[i];
+    let t = if denom == 0.0 {
+        0.0
+    } else {
+        (s - D[i]) / denom
+    };
 
     let r = (C[i].0 as f32 + (C[i + 1].0 as f32 - C[i].0 as f32) * t).round() as i32;
     let g = (C[i].1 as f32 + (C[i + 1].1 as f32 - C[i].1 as f32) * t).round() as i32;
@@ -54,26 +99,17 @@ pub fn star_color_spectrum(stars: f32) -> i32 {
 
     (r << 16) | (g << 8) | b
 }
-// end of JunaGPT's function
 
-/// this NEEDS to be refactored
 pub fn formatted_song_length(seconds: u32) -> String {
     let hour = seconds / 3600;
     let minutes = (seconds % 3600) / 60;
-    let seconds = seconds % 60;
-    let formated_hour = if hour < 1 {
-        "".to_string()
-    } else {
-        hour.to_string() + ":"
-    };
+    let secs = seconds % 60;
 
-    let seconds = if seconds == 0 {
-        "00"
+    if hour < 1 {
+        format!("{}:{:02}", minutes, secs)
     } else {
-        &seconds.to_string()
-    };
-
-    format!("{}{}:{}", formated_hour, minutes, seconds)
+        format!("{hour}:{:02}:{:02}", minutes, secs)
+    }
 }
 
 pub fn save_file(bytes: Bytes, path: &str) -> Result<(), Error> {
@@ -87,22 +123,18 @@ pub fn discord_time_ago(time: OffsetDateTime) -> String {
 }
 
 pub fn grade_emoji(grade: String) -> String {
-    let mut grade_emoji = HashMap::new();
-
-    grade_emoji.insert("SS", "<:SS:1346458936596889640>");
-    grade_emoji.insert("S", "<:S_:1346458998425128990>");
-    grade_emoji.insert("XH", "<:SSH:1346459029656047646>");
-    grade_emoji.insert("SH", "<:SH:1346459119741046794>");
-    grade_emoji.insert("A", "<:A_:1346459159935193139>");
-    grade_emoji.insert("B", "<:B_:1346459185512054814>");
-    grade_emoji.insert("C", "<:C_:1346459204847796264>");
-    grade_emoji.insert("D", "<:D_:1347295031756587039>");
-    grade_emoji.insert("F", "<:F_:1346460123173879859>");
-
-    grade_emoji
-        .get(&grade.to_uppercase() as &str)
-        .unwrap_or(&"invalid_grade")
-        .to_string()
+    match grade.to_uppercase().as_str() {
+        "SS" => "<:SS:1346458936596889640>".to_string(),
+        "S" => "<:S_:1346458998425128990>".to_string(),
+        "XH" => "<:SSH:1346459029656047646>".to_string(),
+        "SH" => "<:SH:1346459119741046794>".to_string(),
+        "A" => "<:A_:1346459159935193139>".to_string(),
+        "B" => "<:B_:1346459185512054814>".to_string(),
+        "C" => "<:C_:1346459204847796264>".to_string(),
+        "D" => "<:D_:1347295031756587039>".to_string(),
+        "F" => "<:F_:1346460123173879859>".to_string(),
+        _ => "invalid_grade".to_string(),
+    }
 }
 
 pub fn player_not_found_embed(name: String) -> CreateEmbed {
@@ -178,7 +210,6 @@ pub trait CommaFormatFloat {
     fn format_acc(&self) -> String;
 }
 
-// Integers
 impl<T> CommaFormat for T
 where
     T: ToFormattedString,
@@ -188,32 +219,38 @@ where
     }
 }
 
-// Floats
 impl<T> CommaFormatFloat for T
 where
     T: ToString + Float,
 {
-    /// this shi is held together by hopes and dreams
+    /// Formats a float into a string with comma-separated integer part and up to two decimals.
     fn format(&self) -> String {
-        let integer_part = self.floor().to_i32().unwrap_or(0).to_formatted_string(&Locale::en);
-        let two_decimals = (self.fract().to_f32().unwrap_or(0.0) * 100.0).round() / 100.0;
-        if two_decimals == 0.0 {
+        let integer_part = self
+            .floor()
+            .to_i32()
+            .unwrap_or(0)
+            .to_formatted_string(&Locale::en);
+
+        let decimal_part = (self.fract().to_f32().unwrap_or(0.0) * 100.0).round() / 100.0;
+
+        if decimal_part == 0.0 {
             return integer_part;
         }
-        
-        let mut two_decimals: String = two_decimals.to_string().chars().skip(1).collect();
-        if two_decimals.len() == 2 {
-            two_decimals += "0";
+
+        let mut formatted_decimals: String = decimal_part.to_string().chars().skip(1).collect();
+        if formatted_decimals.len() == 2 {
+            formatted_decimals.push('0');
         }
 
-        format!("{}{}", integer_part,  two_decimals)
+        format!("{}{}", integer_part, formatted_decimals)
     }
+
     fn two_decimal(&self) -> f32 {
         let num = self.to_f32().unwrap_or(0.0);
         (num * 100.0).round() / 100.0
     }
+
     fn format_acc(&self) -> String {
-        let num = self.to_f32().unwrap_or(0.0);
-        format!("{}%", (num * 100.0).round() / 100.0)
+        format!("{}%", self.two_decimal())
     }
 }

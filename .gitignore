@@ -1,0 +1,5 @@
+/target
+/.env
+/randomstuff
+/resources
+/src/utils.rs.old
