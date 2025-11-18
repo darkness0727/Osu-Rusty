@@ -91,6 +91,11 @@ pub async fn recent(
         return Ok(());
     };
 
+    if beatmap.check_suspicion().is_err() {
+        println!("Didn't parse suspicious beatmap");
+        reply_with_embed(&ctx, failed_embed()).await;
+    }
+
     let embed = create_recent_embed(player, score, beatmap);
 
     reply_with_embed(&ctx, embed).await;

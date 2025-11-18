@@ -6,7 +6,7 @@ use crate::{
     FAIL_EMBED_COLOR,
     osu::osu_utils::{calculate_nc_stats, calculate_score_pp, map_max_stats, modded_map_stats},
     utils::{
-        BPM_EMOJI, CommaFormat, CommaFormatFloat, discord_time_ago, failed_embed_custom,
+        BPM_EMOJI, CommaFormat, CommaFormatFloat, discord_time_ago,
         format_hits, formatted_song_length, get_flag_url, grade_emoji, star_color_spectrum,
     },
 };
@@ -21,11 +21,6 @@ pub fn create_recent_embed(player: UserExtended, score: Score, beatmap: Beatmap)
             .color(FAIL_EMBED_COLOR)
             .description("failed to fetch info");
     };
-
-    if beatmap.check_suspicion().is_err() {
-        println!("Didn't parse suspicious beatmap");
-        return failed_embed_custom("Failed to parse beatmap info".to_string());
-    }
 
     let player_pp = player_stats.pp.format();
     let country_code = player.country_code;
