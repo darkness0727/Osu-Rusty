@@ -1,0 +1,219 @@
+use crate::{Error, FAIL_EMBED_COLOR};
+use bytes::Bytes;
+use num_format::{Locale, ToFormattedString};
+use num_traits::{Float, clamp_min};
+use poise::{Context as PoiseContext, CreateReply};
+use rosu_v2::prelude::{GameMod, GameMods};
+use serenity::{
+    Result as SerenityResult,
+    all::{CreateAllowedMentions, CreateEmbed},
+};
+use std::{collections::HashMap, fs::File, io::Write, time::Duration};
+use time::{OffsetDateTime, format_description};
+use timeago::Formatter;
+
+pub static BPM_EMOJI: &str = "<:bpm:1437855552100368384>";
+
+pub fn format_hits(n300: u32, n100: u32, n50: u32, miss: u32) -> String{
+    format!("{{{}/{}/{}/{}}}", n300, n100, n50, miss)
+}
+
+pub fn is_classic(mods: &GameMods) -> bool {
+    mods.iter().any(|m| matches!(m, &GameMod::ClassicOsu(_)))
+}
+
+/// THIS FUNCTION IS WRITTEN BY CHATGPT BECAUSE IDK HOW TO
+pub fn star_color_spectrum(stars: f32) -> i32 {
+    const D: [f32; 11] = [0.1, 1.25, 2.0, 2.5, 3.3, 4.2, 4.9, 5.8, 6.7, 7.7, 9.0];
+    const C: [(u8, u8, u8); 11] = [
+        (0x42, 0x90, 0xFB),
+        (0x4F, 0xC0, 0xFF),
+        (0x4F, 0xFF, 0xD5),
+        (0x7C, 0xFF, 0x4F),
+        (0xF6, 0xF0, 0x5C),
+        (0xFF, 0x80, 0x68),
+        (0xFF, 0x4E, 0x6F),
+        (0xC6, 0x45, 0xB8),
+        (0x65, 0x63, 0xDE),
+        (0x18, 0x15, 0x8E),
+        (0x00, 0x00, 0x01),
+    ];
+
+    let s = stars.clamp(D[0], D[10]);
+
+    let mut i = 0;
+    while i < 10 && !(s >= D[i] && s <= D[i + 1]) {
+        i += 1;
+    }
+
+    let t = (s - D[i]) / (D[i + 1] - D[i]);
+
+    let r = (C[i].0 as f32 + (C[i + 1].0 as f32 - C[i].0 as f32) * t).round() as i32;
+    let g = (C[i].1 as f32 + (C[i + 1].1 as f32 - C[i].1 as f32) * t).round() as i32;
+    let b = (C[i].2 as f32 + (C[i + 1].2 as f32 - C[i].2 as f32) * t).round() as i32;
+
+    (r << 16) | (g << 8) | b
+}
+// end of JunaGPT's function
+
+/// this NEEDS to be refactored
+pub fn formatted_song_length(seconds: u32) -> String {
+    let hour = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let seconds = seconds % 60;
+    let formated_hour = if hour < 1 {
+        "".to_string()
+    } else {
+        hour.to_string() + ":"
+    };
+
+    let seconds = if seconds == 0 {
+        "00"
+    } else {
+        &seconds.to_string()
+    };
+
+    format!("{}{}:{}", formated_hour, minutes, seconds)
+}
+
+pub fn save_file(bytes: Bytes, path: &str) -> Result<(), Error> {
+    let mut file = File::create(path)?;
+    file.write_all(&bytes)?;
+    Ok(())
+}
+
+pub fn discord_time_ago(time: OffsetDateTime) -> String {
+    format!("<t:{}:R>", time.unix_timestamp())
+}
+
+pub fn grade_emoji(grade: String) -> String {
+    let mut grade_emoji = HashMap::new();
+
+    grade_emoji.insert("SS", "<:SS:1346458936596889640>");
+    grade_emoji.insert("S", "<:S_:1346458998425128990>");
+    grade_emoji.insert("XH", "<:SSH:1346459029656047646>");
+    grade_emoji.insert("SH", "<:SH:1346459119741046794>");
+    grade_emoji.insert("A", "<:A_:1346459159935193139>");
+    grade_emoji.insert("B", "<:B_:1346459185512054814>");
+    grade_emoji.insert("C", "<:C_:1346459204847796264>");
+    grade_emoji.insert("D", "<:D_:1347295031756587039>");
+    grade_emoji.insert("F", "<:F_:1346460123173879859>");
+
+    grade_emoji
+        .get(&grade.to_uppercase() as &str)
+        .unwrap_or(&"invalid_grade")
+        .to_string()
+}
+
+pub fn player_not_found_embed(name: String) -> CreateEmbed {
+    CreateEmbed::new()
+        .color(FAIL_EMBED_COLOR)
+        .description(format!("User {} was not found", wrap_in_tilde(name)))
+}
+
+pub fn failed_embed() -> CreateEmbed {
+    CreateEmbed::new()
+        .color(FAIL_EMBED_COLOR)
+        .description("Something went wrong".to_string())
+}
+
+pub fn failed_embed_custom(custom_err: String) -> CreateEmbed {
+    CreateEmbed::new()
+        .color(FAIL_EMBED_COLOR)
+        .description(custom_err)
+}
+
+pub fn format_join_date(date: OffsetDateTime) -> String {
+    let format = format_description::parse(
+        "Joined on [day padding:none] [month repr:long padding:none] [year] at [hour repr:12 padding:none]:[minute] [period case:lower] UTC +0",
+    )
+    .unwrap_or_default();
+    let formated_date = date.format(&format).unwrap_or_default();
+
+    let now = OffsetDateTime::now_utc();
+
+    let seconds_since_joined = clamp_min((now - date).whole_seconds(), 0) as u64;
+    let ago = Formatter::new().convert(Duration::from_secs(seconds_since_joined));
+
+    format!("{formated_date} ({ago})")
+}
+
+pub fn get_flag_url(country_code: String, size: u16) -> String {
+    format!("https://osuflags.omkserver.nl/{country_code}-{size}.png")
+}
+
+pub fn wrap_in_tilde(text: String) -> String {
+    format!("`{text}`")
+}
+
+pub fn playtime_in_hours(seconds: u32) -> String {
+    if seconds == 0 {
+        return "-".to_string();
+    }
+    (seconds as f32 / 3600.0).round().to_string() + "h"
+}
+
+pub fn check_reply(result: SerenityResult<poise::ReplyHandle<'_>>) {
+    if let Err(why) = result {
+        println!("Error sending message: {:?}", why);
+    }
+}
+
+pub async fn reply_with_embed(ctx: &PoiseContext<'_, (), Error>, embed: CreateEmbed) {
+    let embed_reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .allowed_mentions(CreateAllowedMentions::default().replied_user(false));
+
+    check_reply(ctx.send(embed_reply).await);
+}
+
+pub trait CommaFormat {
+    fn format(&self) -> String;
+}
+
+pub trait CommaFormatFloat {
+    fn format(&self) -> String;
+    fn two_decimal(&self) -> f32;
+    fn format_acc(&self) -> String;
+}
+
+// Integers
+impl<T> CommaFormat for T
+where
+    T: ToFormattedString,
+{
+    fn format(&self) -> String {
+        self.to_formatted_string(&Locale::en)
+    }
+}
+
+// Floats
+impl<T> CommaFormatFloat for T
+where
+    T: ToString + Float,
+{
+    /// this shi is held together by hopes and dreams
+    fn format(&self) -> String {
+        let integer_part = self.floor().to_i32().unwrap_or(0).to_formatted_string(&Locale::en);
+        let two_decimals = (self.fract().to_f32().unwrap_or(0.0) * 100.0).round() / 100.0;
+        if two_decimals == 0.0 {
+            return integer_part;
+        }
+        
+        let mut two_decimals: String = two_decimals.to_string().chars().skip(1).collect();
+        if two_decimals.len() == 2 {
+            two_decimals += "0";
+        }
+
+        format!("{}{}", integer_part,  two_decimals)
+    }
+    fn two_decimal(&self) -> f32 {
+        let num = self.to_f32().unwrap_or(0.0);
+        (num * 100.0).round() / 100.0
+    }
+    fn format_acc(&self) -> String {
+        let num = self.to_f32().unwrap_or(0.0);
+        format!("{}%", (num * 100.0).round() / 100.0)
+    }
+}
