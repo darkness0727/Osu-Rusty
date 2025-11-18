@@ -5,22 +5,13 @@ use rosu_v2::Osu;
 use serenity::prelude::*;
 
 use crate::{
-    commands::{profile::profile, recent::recent},
-    osu::login::login, resource_handler::create_all_dir,
+    commands::{profile::profile, recent::recent}, osu_utils::login, resource_handler::create_all_dir
 };
 
-mod commands {
-    pub mod profile;
-    pub mod recent;
-}
-mod osu {
-    pub mod login;
-    pub mod osu_utils;
-}
-mod embeds {
-    pub mod profile_embed;
-    pub mod recent_embed;
-}
+mod commands;
+mod discord_utils;
+pub mod osu_utils;
+mod embeds;
 pub mod utils;
 pub mod resource_handler;
 
@@ -30,8 +21,7 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub static OSU_CLIENT: OnceCell<Osu> = OnceCell::new();
 
-pub static FAIL_EMBED_COLOR: i32 = 0xFF0000;
-pub static DEFAULT_EMBED_COLOR: i32 = 0x57697d;
+
 #[tokio::main]
 async fn main() {
     _ = create_all_dir();

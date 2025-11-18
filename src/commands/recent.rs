@@ -1,9 +1,9 @@
 use crate::{
-    Error, FAIL_EMBED_COLOR, OSU_CLIENT,
-    embeds::recent_embed::create_recent_embed,
-    utils::{
-        failed_embed, get_beatmap_locally, player_not_found_embed, reply_with_embed, save_map_osu_file, wrap_in_tilde
-    },
+    Error, OSU_CLIENT, discord_utils::reply_with_embed, embeds::{
+        FAIL_EMBED_COLOR,
+        error_embeds::{failed_embed, player_not_found_embed},
+        recent::create,
+    }, osu_utils::{load_local_beatmap, save_map_file}
 };
 use poise::Context as PoiseContext;
 use serenity::all::CreateEmbed;
@@ -38,7 +38,8 @@ pub async fn recent(
             .into_future(),
     );
 
-    let make_fail_embed = |desc: String| CreateEmbed::new().color(FAIL_EMBED_COLOR).description(desc);
+    let make_fail_embed =
+        |desc: String| CreateEmbed::new().color(FAIL_EMBED_COLOR).description(desc);
 
     let player = match player_handle.await {
         Ok(Ok(player)) => player,
@@ -53,7 +54,7 @@ pub async fn recent(
     let recent_scores = match scores_handle.await {
         Ok(Ok(scores)) => scores,
         _ => {
-            let embed = make_fail_embed(format!("{} has no recent scores", wrap_in_tilde(player_name.clone())));
+            let embed = make_fail_embed(format!("`{player_name}` has no recent scores"));
             reply_with_embed(&ctx, embed).await;
             return Ok(());
         }
@@ -62,15 +63,14 @@ pub async fn recent(
     let length = recent_scores.len();
 
     if length < index {
-        let have_text = if length == 0 { "has no".to_string() } else { format!("only has {}", length) };
+        let have_text = if length == 0 {
+            "has no".to_string()
+        } else {
+            format!("only has {}", length)
+        };
         let score_text = if length == 1 { "score" } else { "scores" };
 
-        let embed = make_fail_embed(format!(
-            "{} {} recent {}",
-            wrap_in_tilde(player_name.clone()),
-            have_text,
-            score_text
-        ));
+        let embed = make_fail_embed(format!("`{player_name}` {have_text} recent {score_text}"));
 
         reply_with_embed(&ctx, embed).await;
         return Ok(());
@@ -79,13 +79,13 @@ pub async fn recent(
     let score = recent_scores[index - 1].clone();
     let map_id = score.map_id;
 
-    if let Err(err) = save_map_osu_file(map_id).await {
+    if let Err(err) = save_map_file(map_id).await {
         println!("{err}");
         reply_with_embed(&ctx, failed_embed()).await;
         return Ok(());
     }
 
-    let Ok(beatmap) = get_beatmap_locally(map_id) else {
+    let Ok(beatmap) = load_local_beatmap(map_id) else {
         println!("failed to parse or missing beatmap");
         reply_with_embed(&ctx, failed_embed()).await;
         return Ok(());
@@ -96,7 +96,7 @@ pub async fn recent(
         reply_with_embed(&ctx, failed_embed()).await;
     }
 
-    let embed = create_recent_embed(player, score, beatmap);
+    let embed = create(player, score, beatmap);
 
     reply_with_embed(&ctx, embed).await;
 

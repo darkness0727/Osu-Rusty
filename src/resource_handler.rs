@@ -8,7 +8,11 @@ use crate::{Error, utils::save_file};
 
 static ROOT_PATH: &str = "./resources/";
 
-pub fn save_resource(category: ResourceCategory, name: &str, data_bytes: Bytes) -> Result<String, Error> {
+pub fn save_resource(
+    category: ResourceCategory,
+    name: &str,
+    data_bytes: Bytes,
+) -> Result<String, Error> {
     let path = category_path(category) + name;
     save_file(data_bytes, &path)?;
     Ok(path)
@@ -26,15 +30,10 @@ pub fn remove_resource(category: ResourceCategory, name: &str) -> io::Result<()>
 
 pub fn get_resource_path(category: ResourceCategory, name: &str) -> Option<String> {
     let path = category_path(category) + name;
-    if Path::new(&path).exists() {
-        Some(path)
-    }
-    else {
-        None
-    }
+    Path::new(&path).exists().then_some(path)
 }
 
-pub fn create_all_dir() -> io::Result<()>{
+pub fn create_all_dir() -> io::Result<()> {
     for category in ResourceCategory::iter() {
         let path = category_path(category);
         fs::create_dir_all(&path)?;
@@ -50,7 +49,7 @@ fn category_path(category: ResourceCategory) -> String {
     }
 }
 
-#[derive(EnumIter)] 
+#[derive(EnumIter)]
 pub enum ResourceCategory {
     Score,
     MapData,

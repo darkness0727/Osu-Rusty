@@ -1,4 +1,8 @@
-use crate::{Error, OSU_CLIENT, embeds::profile_embed::create_profile_embed, utils::{check_reply, player_not_found_embed}};
+use crate::{
+    Error, OSU_CLIENT,
+    embeds::{error_embeds::player_not_found_embed, profile::create},
+    discord_utils::check_reply,
+};
 use poise::{Context as PoiseContext, CreateReply};
 use serenity::all::CreateAllowedMentions;
 
@@ -23,7 +27,7 @@ pub async fn profile(
     let player = osu_client.user(&name).await;
 
     let embed = match player {
-        Ok(player_data) => create_profile_embed(player_data),
+        Ok(player_data) => create(player_data),
         Err(_) => player_not_found_embed(name),
     };
 
