@@ -1,4 +1,4 @@
-pub mod error_embeds;
+pub mod error;
 pub mod profile;
 pub mod recent;
 

@@ -2,7 +2,7 @@ use rosu_v2::prelude::UserExtended;
 use serenity::all::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter};
 
 use crate::{
-    embeds::{DEFAULT_EMBED_COLOR, error_embeds::failed_embed_custom},
+    embeds::{DEFAULT_EMBED_COLOR, error::failed_embed_custom},
     utils::{
         CommaFormat, CommaFormatFloat, 
     },

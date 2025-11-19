@@ -8,6 +8,18 @@ pub fn player_not_found_embed(name: String) -> CreateEmbed {
         .description(format!("User `{name}` was not found"))
 }
 
+pub fn not_enough_scores(name: String, length: usize) -> CreateEmbed {
+    let description = match length {
+        0 => format!("`{name}` has no recent scores"),
+        1 => format!("`{name}` only has {length} recent score"),
+        _ => format!("`{name}` only has {length} recent scores"),
+    };
+
+    CreateEmbed::new()
+        .color(FAIL_EMBED_COLOR)
+        .description(description)
+}
+
 pub fn failed_embed() -> CreateEmbed {
     CreateEmbed::new()
         .color(FAIL_EMBED_COLOR)

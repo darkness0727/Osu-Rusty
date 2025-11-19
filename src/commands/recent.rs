@@ -2,10 +2,10 @@ use crate::{
     Error,
     discord_utils::reply_with_embed,
     embeds::{
-        error_embeds::{failed_embed, failed_embed_custom, player_not_found_embed},
+        error::{failed_embed, not_enough_scores, player_not_found_embed},
         recent::create,
     },
-    osu_utils::{fetch_player, fetch_scores, load_local_beatmap, download_map_file},
+    osu_utils::{download_map_file, fetch_player, fetch_scores, load_local_beatmap},
 };
 use poise::Context as PoiseContext;
 /// See an user's osu recent score with statistics
@@ -44,14 +44,7 @@ pub async fn recent(
 
     let length = recent_scores.len();
     if length < index {
-        let text = match length {
-            0 => format!("`{name}` has no recent scores"),
-            1 => format!("`{name}` only has {length} recent score"),
-            _ => format!("`{name}` only has {length} recent scores"),
-        };
-
-        let embed = failed_embed_custom(text);
-
+        let embed = not_enough_scores(name, length);
         reply_with_embed(&ctx, embed).await;
         return Ok(());
     }

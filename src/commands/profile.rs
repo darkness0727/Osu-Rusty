@@ -1,5 +1,5 @@
 use crate::{
-    Error, discord_utils::reply_with_embed, embeds::{error_embeds::player_not_found_embed, profile::create}, osu_utils::fetch_player
+    Error, discord_utils::reply_with_embed, embeds::{error::player_not_found_embed, profile::create}, osu_utils::fetch_player
 };
 use poise::Context as PoiseContext;
 
