@@ -1,13 +1,13 @@
 use crate::{
-    Error, OSU_CLIENT, discord_utils::reply_with_embed, embeds::{
-        FAIL_EMBED_COLOR,
-        error_embeds::{failed_embed, player_not_found_embed},
+    Error,
+    discord_utils::reply_with_embed,
+    embeds::{
+        error_embeds::{failed_embed, failed_embed_custom, player_not_found_embed},
         recent::create,
-    }, osu_utils::{load_local_beatmap, save_map_file}
+    },
+    osu_utils::{fetch_player, fetch_scores, load_local_beatmap, download_map_file},
 };
 use poise::Context as PoiseContext;
-use serenity::all::CreateEmbed;
-
 /// See an user's osu recent score with statistics
 #[poise::command(
     prefix_command,
@@ -22,24 +22,10 @@ pub async fn recent(
     #[description = "Specify a user"] name: String,
     #[description = "Specify which score"] index: Option<usize>,
 ) -> Result<(), Error> {
-    let Some(osu_client) = OSU_CLIENT.get() else {
-        println!("Err: tried to access osu client before it was intialized");
-        return Ok(());
-    };
-
     let index = index.unwrap_or(1);
 
-    let player_handle = tokio::spawn(osu_client.user(&name).into_future());
-    let scores_handle = tokio::spawn(
-        osu_client
-            .user_scores(&name)
-            .recent()
-            .limit(index)
-            .into_future(),
-    );
-
-    let make_fail_embed =
-        |desc: String| CreateEmbed::new().color(FAIL_EMBED_COLOR).description(desc);
+    let player_handle = tokio::spawn(fetch_player(name.clone()));
+    let scores_handle = tokio::spawn(fetch_scores(name.clone(), index));
 
     let player = match player_handle.await {
         Ok(Ok(player)) => player,
@@ -49,28 +35,22 @@ pub async fn recent(
             return Ok(());
         }
     };
+    let name = player.username.to_string();
 
-    let player_name = player.username.to_string();
     let recent_scores = match scores_handle.await {
         Ok(Ok(scores)) => scores,
-        _ => {
-            let embed = make_fail_embed(format!("`{player_name}` has no recent scores"));
-            reply_with_embed(&ctx, embed).await;
-            return Ok(());
-        }
+        _ => vec![],
     };
 
     let length = recent_scores.len();
-
     if length < index {
-        let have_text = if length == 0 {
-            "has no".to_string()
-        } else {
-            format!("only has {}", length)
+        let text = match length {
+            0 => format!("`{name}` has no recent scores"),
+            1 => format!("`{name}` only has {length} recent score"),
+            _ => format!("`{name}` only has {length} recent scores"),
         };
-        let score_text = if length == 1 { "score" } else { "scores" };
 
-        let embed = make_fail_embed(format!("`{player_name}` {have_text} recent {score_text}"));
+        let embed = failed_embed_custom(text);
 
         reply_with_embed(&ctx, embed).await;
         return Ok(());
@@ -79,7 +59,7 @@ pub async fn recent(
     let score = recent_scores[index - 1].clone();
     let map_id = score.map_id;
 
-    if let Err(err) = save_map_file(map_id).await {
+    if let Err(err) = download_map_file(map_id).await {
         println!("{err}");
         reply_with_embed(&ctx, failed_embed()).await;
         return Ok(());
@@ -90,11 +70,6 @@ pub async fn recent(
         reply_with_embed(&ctx, failed_embed()).await;
         return Ok(());
     };
-
-    if beatmap.check_suspicion().is_err() {
-        println!("Didn't parse suspicious beatmap");
-        reply_with_embed(&ctx, failed_embed()).await;
-    }
 
     let embed = create(player, score, beatmap);
 

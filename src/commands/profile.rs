@@ -1,10 +1,7 @@
 use crate::{
-    Error, OSU_CLIENT,
-    embeds::{error_embeds::player_not_found_embed, profile::create},
-    discord_utils::check_reply,
+    Error, discord_utils::reply_with_embed, embeds::{error_embeds::player_not_found_embed, profile::create}, osu_utils::fetch_player
 };
-use poise::{Context as PoiseContext, CreateReply};
-use serenity::all::CreateAllowedMentions;
+use poise::Context as PoiseContext;
 
 /// See an user's osu profile and stats
 #[poise::command(
@@ -19,23 +16,13 @@ pub async fn profile(
     ctx: PoiseContext<'_, (), Error>,
     #[description = "Specify a user"] name: String,
 ) -> Result<(), Error> {
-    let Some(osu_client) = OSU_CLIENT.get() else {
-        println!("Err: tried to access osu client before it was intialized");
-        return Ok(());
-    };
+    let player_result = fetch_player(name.clone()).await;
 
-    let player = osu_client.user(&name).await;
-
-    let embed = match player {
+    let embed = match player_result {
         Ok(player_data) => create(player_data),
         Err(_) => player_not_found_embed(name),
     };
 
-    let embed_reply = CreateReply::default()
-        .embed(embed)
-        .reply(true)
-        .allowed_mentions(CreateAllowedMentions::default().replied_user(false));
-
-    check_reply(ctx.send(embed_reply).await);
+    reply_with_embed(&ctx, embed).await;
     Ok(())
 }

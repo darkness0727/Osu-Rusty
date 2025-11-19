@@ -1,25 +1,37 @@
 use std::time::Duration;
 
 use crate::{
-    Error,
-    resource_handler::{ResourceCategory, get_resource_path, remove_resource, save_resource},
-    utils::CommaFormatFloat,
+    Error, OSU_CLIENT, resource_handler::{ResourceCategory, get_resource_path, save_resource}, utils::CommaFormatFloat
 };
 use num_traits::clamp_min;
 use rosu_pp::{
     Beatmap,
     any::PerformanceAttributes,
-    osu::{Osu, OsuScoreOrigin, OsuScoreState},
+    osu::{Osu as Osu_Pp, OsuScoreOrigin, OsuScoreState},
 };
 use rosu_v2::{
-    error::OsuError,
-    prelude::{GameMod, GameMods, Score},
+    error::OsuError, prelude::{GameMod, GameMods, Score, UserExtended}
 };
 use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
 
 pub async fn login(client_id: u64, client_secret: String) -> Result<rosu_v2::Osu, OsuError> {
     rosu_v2::Osu::new(client_id, client_secret).await
+}
+
+pub async fn fetch_player(name: String) -> Result<UserExtended, OsuError> {
+    let osu = OSU_CLIENT.get().unwrap();
+    osu.user(&name).await
+}
+
+pub async fn fetch_scores(name: String, amount: usize) -> Result<Vec<Score>, OsuError> {
+    let osu = OSU_CLIENT.get().unwrap();
+    
+    osu
+        .user_scores(&name)
+        .recent()
+        .limit(amount)
+        .await
 }
 
 pub fn calculate_score_pp(perf_attrs: PerformanceAttributes, score: &Score) -> f64 {
@@ -48,7 +60,7 @@ pub fn map_stats(
 ) -> (PerformanceAttributes, MapStats) {
     let diff_attrs = rosu_pp::Difficulty::new()
         .mods(mods.clone())
-        .calculate_for_mode::<Osu>(beatmap)
+        .calculate_for_mode::<Osu_Pp>(beatmap)
         .unwrap();
 
     let stars = diff_attrs.stars;
@@ -172,7 +184,7 @@ pub struct MapStats {
 
 pub static BPM_EMOJI: &str = "<:bpm:1437855552100368384>";
 
-pub async fn save_map_file(map_id: u32) -> Result<String, Error> {
+pub async fn download_map_file(map_id: u32) -> Result<String, Error> {
     let file_name = format!("{}.osu", map_id);
 
     if let Some(path) = get_resource_path(ResourceCategory::MapData, &file_name) {
@@ -192,10 +204,11 @@ pub fn load_local_beatmap(map_id: u32) -> Result<Beatmap, Error> {
     let path =
         get_resource_path(ResourceCategory::MapData, &file_name).ok_or("beatmap not found")?;
 
-    rosu_pp::Beatmap::from_path(path).map_err(|err| {
-        let _ = remove_resource(ResourceCategory::MapData, &file_name);
-        format!("{}\nbeatmap file likely corrupted, file removed", err).into()
-    })
+
+    let map = rosu_pp::Beatmap::from_path(path)?;
+    map.check_suspicion()?;
+
+    Ok(map)
 }
 
 pub fn format_hits(n300: u32, n100: u32, n50: u32, miss: u32) -> String {
