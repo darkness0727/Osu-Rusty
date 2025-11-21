@@ -1,18 +1,21 @@
+use std::ops::Not;
+
 use rosu_pp::Beatmap;
 use rosu_v2::prelude::{Score, UserExtended};
 use serenity::all::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter};
 
 use crate::{
     embeds::FAIL_EMBED_COLOR,
-    osu_utils::{
-        BPM_EMOJI, format_hits, formatted_song_length, get_flag_url, grade_emoji,
-        relative_timestamp, star_color_spectrum,
+    utils::{
+        CommaFormat, CommaFormatFloat,
+        osu_utils::{
+            BPM_EMOJI, calculate_nc_stats, cal_score_pp_perf, format_hits, formatted_song_length,
+            get_flag_url, grade_emoji, is_fc, map_stats, relative_timestamp, star_color_spectrum,
+        },
     },
-    osu_utils::{calculate_nc_stats, calculate_score_pp, map_stats},
-    utils::{CommaFormat, CommaFormatFloat},
 };
 
-pub fn create(player: UserExtended, score: Score, beatmap: Beatmap) -> CreateEmbed {
+pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEmbed {
     let player_name = player.username.to_string();
 
     let (Some(player_stats), Some(map), Some(mapset)) =
@@ -52,25 +55,31 @@ pub fn create(player: UserExtended, score: Score, beatmap: Beatmap) -> CreateEmb
     let song_length = formatted_song_length(seconds_drain);
     let max_pp = map_stats.pp.format();
     let stars = map_stats.stars.two_decimal();
-    let map_max_combo = map_stats.combo;
+    let score_combo = score.max_combo;
+    let map_combo = map_stats.combo;
     let pp = score
         .pp
-        .unwrap_or_else(|| calculate_score_pp(perf_attrs.clone(), &score) as f32)
+        .unwrap_or_else(|| cal_score_pp_perf(perf_attrs.clone(), score) as f32)
         .two_decimal();
-
-    let nc_stats = calculate_nc_stats(perf_attrs, &score);
-
-    let nc_pp = nc_stats.pp.format();
-    let nc_acc = nc_stats.acc.format_acc();
-    let nc_formatted_hits = format_hits(nc_stats.n300, nc_stats.n100, nc_stats.n50, nc_stats.miss);
 
     let stats = &score.statistics;
     let formatted_hits = format_hits(stats.great, stats.ok, stats.meh, stats.miss);
 
-    let nc_stats_formatted = format!(
-        "**If FC** (__{} PP__)  • {} • **{}**\n",
-        nc_pp, nc_formatted_hits, nc_acc
-    );
+    let nc_stats = if is_fc(score, map_combo, map.count_sliders).not() {
+        let nc_stats = calculate_nc_stats(perf_attrs, score);
+
+        let nc_pp = nc_stats.pp.format();
+        let nc_acc = nc_stats.acc.two_decimal();
+        let nc_formatted_hits =
+            format_hits(nc_stats.n300, nc_stats.n100, nc_stats.n50, nc_stats.miss);
+
+        format!(
+            "**If FC** (__{} PP__)  • {} • **{}%**\n",
+            nc_pp, nc_formatted_hits, nc_acc
+        )
+    } else {
+        Default::default()
+    };
 
     let embed_author = CreateEmbedAuthor::new("")
         .name(format!(
@@ -88,28 +97,20 @@ pub fn create(player: UserExtended, score: Score, beatmap: Beatmap) -> CreateEmb
     );
 
     let embed_field_name = format!(
-        "{}\t{}\t{}\t{}\t{}",
+        "{}\t{}%\t{}\t{}\t{}",
         grade_emoji(score.grade.to_string()),
-        score.accuracy.format_acc(),
+        score.accuracy.two_decimal(),
         formatted_mods,
         score.score.format(),
         time_ago,
     );
 
     let embed_field_value = format!(
-        "**{}**/{} PP • {} • **{}**/{}x\n{}`CS: {} AR: {} OD: {} HP: {}` • `{}` • {BPM_EMOJI} **{}**",
-        pp,
-        max_pp,
-        formatted_hits,
-        score.max_combo,
-        map_max_combo,
-        nc_stats_formatted,
-        cs,
-        ar,
-        od,
-        hp,
-        song_length,
-        bpm,
+        "{}\n{}",
+        format!("**{pp}**/{max_pp} PP • {formatted_hits} • **{score_combo}**/{map_combo}x"),
+        format!(
+            "{nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` {BPM_EMOJI} **{bpm}**"
+        )
     );
 
     let embed_footer = CreateEmbedFooter::new("")
@@ -127,4 +128,26 @@ pub fn create(player: UserExtended, score: Score, beatmap: Beatmap) -> CreateEmb
         .url(&map.url)
         .footer(embed_footer)
         .color(star_color_spectrum(stars))
+}
+
+pub fn edit_pb(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
+    let description = format!("**__Personal Best #{pb_index}__**  • Gained: **{pp_gained}pp**");
+
+    embed
+        .description(description)
+}
+
+pub fn edit_missing_pb(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
+    let missing_text = "**[(?)](https://discord.com/channels/1297750821219467264/1297838959854096454/# \"the top200 did not include this score likely because the api wasn't done processing but presumably the score is in there\")**";
+    let description = format!("**__Personal Best #{pb_index}__** {missing_text}  • Gained: **{pp_gained}pp**");
+
+    embed
+        .description(description)
+}
+
+pub fn edit_if_ranked_pb(embed: CreateEmbed, pb_index: usize) -> CreateEmbed {
+    let description = format!("__Personal Best #{pb_index}__ • **If Ranked**");
+
+    embed
+        .description(description)
 }

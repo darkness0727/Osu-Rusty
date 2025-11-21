@@ -4,6 +4,9 @@ use std::{fs::File, io::Write};
 use bytes::Bytes;
 use num_format::{Locale, ToFormattedString};
 
+pub mod discord_utils;
+pub mod osu_utils;
+
 pub fn save_file(bytes: Bytes, path: &str) -> Result<(), Error> {
     let mut file = File::create(path)?;
     file.write_all(&bytes)?;
@@ -16,7 +19,6 @@ pub trait CommaFormat {
 pub trait CommaFormatFloat {
     fn format(&self) -> String;
     fn two_decimal(&self) -> f32;
-    fn format_acc(&self) -> String;
 }
 
 impl<T> CommaFormat for T
@@ -57,9 +59,5 @@ where
     fn two_decimal(&self) -> f32 {
         let num = self.to_f32().unwrap_or(0.0);
         (num * 100.0).round() / 100.0
-    }
-
-    fn format_acc(&self) -> String {
-        format!("{}%", self.two_decimal())
     }
 }

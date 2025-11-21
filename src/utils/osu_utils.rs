@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use crate::{
-    Error, OSU_CLIENT, resource_handler::{ResourceCategory, get_resource_path, save_resource}, utils::CommaFormatFloat
+    Error, OSU_CLIENT,
+    resource_handler::{ResourceCategory, get_resource_path, save_resource},
+    utils::CommaFormatFloat,
 };
 use num_traits::clamp_min;
 use rosu_pp::{
@@ -10,7 +12,8 @@ use rosu_pp::{
     osu::{Osu as Osu_Pp, OsuScoreOrigin, OsuScoreState},
 };
 use rosu_v2::{
-    error::OsuError, prelude::{GameMod, GameMods, Score, UserExtended}
+    error::OsuError,
+    prelude::{GameMod, GameMods, Score, UserExtended},
 };
 use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
@@ -24,17 +27,114 @@ pub async fn fetch_player(name: String) -> Result<UserExtended, OsuError> {
     osu.user(&name).await
 }
 
-pub async fn fetch_scores(name: String, amount: usize) -> Result<Vec<Score>, OsuError> {
+pub async fn fetch_recent_scores(name: String, amount: usize) -> Result<Vec<Score>, OsuError> {
     let osu = OSU_CLIENT.get().unwrap();
-    
-    osu
-        .user_scores(&name)
-        .recent()
-        .limit(amount)
-        .await
+
+    osu.user_scores(&name).recent().limit(amount).await
 }
 
-pub fn calculate_score_pp(perf_attrs: PerformanceAttributes, score: &Score) -> f64 {
+pub async fn fetch_personal_bests(name: String, amount: usize, offset: usize) -> Result<Vec<Score>, OsuError> {
+    let osu = OSU_CLIENT.get().unwrap();
+
+    osu.user_scores(&name).best().limit(amount).offset(offset).await
+}
+
+/// Returns if the score is present in the top200 and its index. if the PP is high enough be present in the top200, the index.
+pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult, Error> {
+    let top_ids: Vec<u64> = top_plays.iter().map(|s| s.id).collect();
+    let top_pps: Vec<f32> = top_plays.iter().map(|s| s.pp.unwrap_or(0.0)).collect();
+
+    let mut score_pp = score.pp.unwrap_or_default();
+
+    if score.pp.is_none() {
+        download_map_file(score.map_id).await?;
+        let beatmap = load_local_beatmap(score.map_id)?;
+        score_pp = cal_score_pp_beatmap(&beatmap, score) as f32;
+    }
+    else {
+        // check for score ID match
+        for (index, id) in top_ids.iter().enumerate() {
+            if id == &score.id {
+                return Ok(IsPbResult::InPB(index + 1));
+            }
+        }
+
+        // return None if there is a different score on the same map with a higher PP
+        for top_score in top_plays.iter() {
+            if top_score.map_id == score.map_id && top_score.pp.unwrap_or(0.0) >= score_pp {
+                return Ok(IsPbResult::NotPB);
+            }
+        }
+    }
+
+    // return what index the play would be if it's pp is high enough to be a top200 score
+
+    println!("{score_pp}");
+    println!("{top_pps:#?}");
+
+    for (index , pp) in top_pps.iter().enumerate() {
+        if &score_pp > pp {
+            if score.pp.is_none() {
+                return Ok(IsPbResult::IfRanked(index + 1));
+            }{
+                return Ok(IsPbResult::MissingPB(index + 1));
+            }
+        }
+    }
+
+    Ok(IsPbResult::NotPB)
+}
+
+#[derive(Debug)]
+pub enum IsPbResult {
+    InPB(usize),
+    MissingPB(usize),
+    IfRanked(usize),
+    NotPB,
+}
+
+pub fn is_fc(score: &Score, map_combo: u32, slider_count: u32) -> bool {
+    if !is_classic(&score.mods) {
+        let stats = &score.statistics;
+        return stats.miss + stats.small_tick_miss + stats.large_tick_miss == 0;
+    }
+
+    let fc_threshold = map_combo as f32 - 0.1 * slider_count as f32;
+    score.max_combo as f32 >= fc_threshold
+}
+
+pub fn cal_score_pp_beatmap(beatmap: &Beatmap, score: &Score) -> f64 {
+    let stats = &score.statistics;
+    let is_classic = is_classic(&score.mods);
+
+    let mods = score.mods.clone();
+
+    let diff_attrs = rosu_pp::Difficulty::new()
+        .mods(mods.clone())
+        .calculate_for_mode::<Osu_Pp>(beatmap)
+        .unwrap();
+
+    let perf_attrs = rosu_pp::Performance::new(diff_attrs)
+        .mods(mods)
+        .calculate();
+
+    perf_attrs
+        .performance()
+        .mods(score.mods.clone())
+        .combo(score.max_combo)
+        .accuracy(score.accuracy as f64)
+        .large_tick_hits(stats.large_tick_hit)
+        .small_tick_hits(stats.small_tick_hit)
+        .misses(stats.miss)
+        .n50(stats.meh)
+        .n100(stats.ok)
+        .n300(stats.great)
+        .lazer(!is_classic)
+        .calculate()
+        .pp()
+}
+
+pub fn cal_score_pp_perf(perf_attrs: PerformanceAttributes, score: &Score) -> f64 {
     let stats = &score.statistics;
     let is_classic = is_classic(&score.mods);
     perf_attrs
@@ -203,7 +303,6 @@ pub fn load_local_beatmap(map_id: u32) -> Result<Beatmap, Error> {
 
     let path =
         get_resource_path(ResourceCategory::MapData, &file_name).ok_or("beatmap not found")?;
-
 
     let map = rosu_pp::Beatmap::from_path(path)?;
     map.check_suspicion()?;

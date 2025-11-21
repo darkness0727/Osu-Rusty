@@ -1,0 +1,48 @@
+use crate::Error;
+use poise::{Context as PoiseContext, CreateReply, ReplyHandle};
+use serenity::{
+    Result as SerenityResult,
+    all::{CreateAllowedMentions, CreateEmbed},
+};
+
+pub fn check_reply(result: SerenityResult<poise::ReplyHandle<'_>>) {
+    if let Err(why) = result {
+        println!("Error sending message: {:?}", why);
+    }
+
+}
+pub fn check_edit(result: Result<(), serenity::Error>) {
+    if let Err(why) = result {
+        println!("Error editing message: {:?}", why);
+    }
+}
+
+pub async fn check_reply_with_embed(ctx: &PoiseContext<'_, (), Error>, embed: CreateEmbed) {
+    let embed_reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .allowed_mentions(CreateAllowedMentions::default().replied_user(false));
+
+    check_reply(ctx.send(embed_reply).await);
+}
+
+pub async fn reply_with_embed<'a>(
+    ctx: &'a PoiseContext<'_, (), Error>,
+    embed: CreateEmbed,
+) -> Result<ReplyHandle<'a>, serenity::Error> {
+    let embed_reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .allowed_mentions(CreateAllowedMentions::default().replied_user(false));
+
+    ctx.send(embed_reply).await
+}
+
+pub async fn edit_message_embed(ctx: PoiseContext<'_, (), Error>, handle: ReplyHandle<'_>, embed: CreateEmbed) {
+    let embed_reply = CreateReply::default()
+        .embed(embed)
+        .reply(true)
+        .allowed_mentions(CreateAllowedMentions::default().replied_user(false));
+
+    check_edit(handle.edit(ctx, embed_reply).await);
+}

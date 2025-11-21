@@ -1,5 +1,8 @@
 use crate::{
-    Error, discord_utils::reply_with_embed, embeds::{error::player_not_found_embed, profile::create}, osu_utils::fetch_player
+    Error,
+    utils::discord_utils::check_reply_with_embed,
+    embeds::{error::player_not_found_embed, profile::create},
+    utils::osu_utils::fetch_player,
 };
 use poise::Context as PoiseContext;
 
@@ -16,13 +19,13 @@ pub async fn profile(
     ctx: PoiseContext<'_, (), Error>,
     #[description = "Specify a user"] name: String,
 ) -> Result<(), Error> {
-    let player_result = fetch_player(name.clone()).await;
-
-    let embed = match player_result {
-        Ok(player_data) => create(player_data),
-        Err(_) => player_not_found_embed(name),
-    };
-
-    reply_with_embed(&ctx, embed).await;
+    check_reply_with_embed(
+        &ctx,
+        fetch_player(name.clone())
+            .await
+            .map(create)
+            .unwrap_or_else(|_| player_not_found_embed(name)),
+    )
+    .await;
     Ok(())
 }

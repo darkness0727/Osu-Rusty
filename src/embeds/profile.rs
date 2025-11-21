@@ -6,7 +6,7 @@ use crate::{
     utils::{
         CommaFormat, CommaFormatFloat, 
     },
-    osu_utils::{format_join_date, get_flag_url, playtime_in_hours,
+    utils::osu_utils::{format_join_date, get_flag_url, playtime_in_hours,
         relative_timestamp,}
 };
 
@@ -17,7 +17,7 @@ pub fn create(player: UserExtended) -> CreateEmbed {
     };
 
     let pp = stats.pp.format();
-    let acc = stats.accuracy.format_acc();
+    let acc = stats.accuracy.two_decimal();
     let playcount = stats.playcount.format();
     let level = stats.level.current.format();
     let playtime = playtime_in_hours(stats.playtime);
@@ -69,7 +69,7 @@ pub fn create(player: UserExtended) -> CreateEmbed {
 
     let description = format!(
         "{}\n{}\n{}",
-        format!("Accuracy: `{acc}` • Level: `{level}`"),
+        format!("Accuracy: `{acc}%` • Level: `{level}`"),
         format!("Playtime: `{playtime}` • Playcount: `{playcount}`"),
         format!("Medals: `{medal_count}` • Team: {team_linked_name}{peak_rank_with_timestamp}"),
     );

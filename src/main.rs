@@ -5,12 +5,10 @@ use rosu_v2::Osu;
 use serenity::prelude::*;
 
 use crate::{
-    commands::{profile::profile, recent::recent}, osu_utils::login, resource_handler::create_all_dir
+    commands::{profile::profile, recent::recent}, utils::osu_utils::login, resource_handler::create_all_dir
 };
 
 mod commands;
-mod discord_utils;
-pub mod osu_utils;
 mod embeds;
 pub mod utils;
 pub mod resource_handler;
