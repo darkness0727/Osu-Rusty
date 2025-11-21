@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{ops::Not, time::Duration};
 
 use crate::{
     Error, OSU_CLIENT,
@@ -33,16 +33,24 @@ pub async fn fetch_recent_scores(name: String, amount: usize) -> Result<Vec<Scor
     osu.user_scores(&name).recent().limit(amount).await
 }
 
-pub async fn fetch_personal_bests(name: String, amount: usize, offset: usize) -> Result<Vec<Score>, OsuError> {
+pub async fn fetch_personal_bests(
+    name: String,
+    amount: usize,
+    offset: usize,
+) -> Result<Vec<Score>, OsuError> {
     let osu = OSU_CLIENT.get().unwrap();
 
-    osu.user_scores(&name).best().limit(amount).offset(offset).await
+    osu.user_scores(&name)
+        .best()
+        .limit(amount)
+        .offset(offset)
+        .await
 }
 
 /// Returns if the score is present in the top200 and its index. if the PP is high enough be present in the top200, the index.
 pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult, Error> {
-    let top_ids: Vec<u64> = top_plays.iter().map(|s| s.id).collect();
-    let top_pps: Vec<f32> = top_plays.iter().map(|s| s.pp.unwrap_or(0.0)).collect();
+    let top_ids  = top_plays.iter().map(|s| s.id);
+    let top_pps = top_plays.iter().map(|s| s.pp.unwrap_or(0.0));
 
     let mut score_pp = score.pp.unwrap_or_default();
 
@@ -50,16 +58,15 @@ pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult
         download_map_file(score.map_id).await?;
         let beatmap = load_local_beatmap(score.map_id)?;
         score_pp = cal_score_pp_beatmap(&beatmap, score) as f32;
-    }
-    else {
+    } else {
         // check for score ID match
-        for (index, id) in top_ids.iter().enumerate() {
-            if id == &score.id {
+        for (index, id) in top_ids.enumerate() {
+            if id == score.id {
                 return Ok(IsPbResult::InPB(index + 1));
             }
         }
 
-        // return None if there is a different score on the same map with a higher PP
+        // return NotPB if there is a different score on the same map with a higher PP
         for top_score in top_plays.iter() {
             if top_score.map_id == score.map_id && top_score.pp.unwrap_or(0.0) >= score_pp {
                 return Ok(IsPbResult::NotPB);
@@ -68,15 +75,12 @@ pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult
     }
 
     // return what index the play would be if it's pp is high enough to be a top200 score
-
-    println!("{score_pp}");
-    println!("{top_pps:#?}");
-
-    for (index , pp) in top_pps.iter().enumerate() {
-        if &score_pp > pp {
+    for (index, pp) in top_pps.enumerate() {
+        if score_pp > pp {
             if score.pp.is_none() {
                 return Ok(IsPbResult::IfRanked(index + 1));
-            }{
+            }
+            {
                 return Ok(IsPbResult::MissingPB(index + 1));
             }
         }
@@ -85,7 +89,6 @@ pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult
     Ok(IsPbResult::NotPB)
 }
 
-#[derive(Debug)]
 pub enum IsPbResult {
     InPB(usize),
     MissingPB(usize),
@@ -114,9 +117,7 @@ pub fn cal_score_pp_beatmap(beatmap: &Beatmap, score: &Score) -> f64 {
         .calculate_for_mode::<Osu_Pp>(beatmap)
         .unwrap();
 
-    let perf_attrs = rosu_pp::Performance::new(diff_attrs)
-        .mods(mods)
-        .calculate();
+    let perf_attrs = rosu_pp::Performance::new(diff_attrs).mods(mods).calculate();
 
     perf_attrs
         .performance()
@@ -251,11 +252,17 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
 
     let nc_pp = nc_attrs.pp();
 
+    let slider_tail_miss = is_classic
+        .not()
+        .then(|| max_stats.slider_tail_hit - stats.slider_tail_hit)
+        .unwrap_or(0);
+
     NoChokeStats {
         n300: nc_300,
         n100: nc_100,
         n50: nc_50,
         miss: 0,
+        slider_tail_miss,
         acc: nc_acc,
         pp: nc_pp,
     }
@@ -266,6 +273,7 @@ pub struct NoChokeStats {
     pub n100: u32,
     pub n50: u32,
     pub miss: u32,
+    pub slider_tail_miss: u32,
     pub acc: f64,
     pub pp: f64,
 }
@@ -281,8 +289,6 @@ pub struct MapStats {
     pub combo: u32,
     pub pp: f64,
 }
-
-pub static BPM_EMOJI: &str = "<:bpm:1437855552100368384>";
 
 pub async fn download_map_file(map_id: u32) -> Result<String, Error> {
     let file_name = format!("{}.osu", map_id);
@@ -312,6 +318,33 @@ pub fn load_local_beatmap(map_id: u32) -> Result<Beatmap, Error> {
 
 pub fn format_hits(n300: u32, n100: u32, n50: u32, miss: u32) -> String {
     format!("{{{}/{}/{}/{}}}", n300, n100, n50, miss)
+}
+
+pub fn format_slider_misses(score: &Score) -> Option<String> {
+    if is_classic(&score.mods) {
+        return None;
+    };
+
+    let stats = &score.statistics;
+    let tick_miss = stats.small_tick_miss + stats.large_tick_miss;
+    let tail_miss = score.maximum_statistics.slider_tail_hit - stats.slider_tail_hit;
+
+    let has_tick_miss = tick_miss > 0;
+    let has_tail_miss = tail_miss > 0;
+
+    if !has_tick_miss && !has_tail_miss {
+        return None;
+    };
+
+    let tick_miss_text = has_tick_miss
+        .then(|| format!("**{tick_miss}**{TICK_MISS_EMOJI}"))
+        .unwrap_or_default();
+
+    let tail_miss_text = has_tail_miss
+        .then(|| format!("**{tail_miss}**{TAIL_MISS_EMOJI}"))
+        .unwrap_or_default();
+
+    Some(format!("{tick_miss_text}{tail_miss_text}"))
 }
 
 pub fn is_classic(mods: &GameMods) -> bool {
@@ -361,7 +394,7 @@ pub fn star_color_spectrum(stars: f32) -> i32 {
     (r << 16) | (g << 8) | b
 }
 
-pub fn formatted_song_length(seconds: u32) -> String {
+pub fn formated_song_length(seconds: u32) -> String {
     let hour = seconds / 3600;
     let minutes = (seconds % 3600) / 60;
     let secs = seconds % 60;
@@ -376,6 +409,10 @@ pub fn formatted_song_length(seconds: u32) -> String {
 pub fn relative_timestamp(time: OffsetDateTime) -> String {
     format!("<t:{}:R>", time.unix_timestamp())
 }
+
+pub static BPM_EMOJI: &str = "<:bpm:1437855552100368384>";
+pub static TICK_MISS_EMOJI: &str = "<:slider_tick_miss:1441484864049123399>";
+pub static TAIL_MISS_EMOJI: &str = "<:slider_tail_miss:1441484819698815129>";
 
 pub fn grade_emoji(grade: String) -> String {
     match grade.to_uppercase().as_str() {

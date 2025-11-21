@@ -9,8 +9,9 @@ use crate::{
     utils::{
         CommaFormat, CommaFormatFloat,
         osu_utils::{
-            BPM_EMOJI, calculate_nc_stats, cal_score_pp_perf, format_hits, formatted_song_length,
-            get_flag_url, grade_emoji, is_fc, map_stats, relative_timestamp, star_color_spectrum,
+            BPM_EMOJI, TAIL_MISS_EMOJI, cal_score_pp_perf, calculate_nc_stats, format_hits,
+            format_slider_misses, formated_song_length, get_flag_url, grade_emoji, is_fc,
+            map_stats, relative_timestamp, star_color_spectrum,
         },
     },
 };
@@ -52,7 +53,7 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         map_stats.seconds_drain,
     );
 
-    let song_length = formatted_song_length(seconds_drain);
+    let song_length = formated_song_length(seconds_drain);
     let max_pp = map_stats.pp.format();
     let stars = map_stats.stars.two_decimal();
     let score_combo = score.max_combo;
@@ -63,7 +64,11 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         .two_decimal();
 
     let stats = &score.statistics;
+
     let formatted_hits = format_hits(stats.great, stats.ok, stats.meh, stats.miss);
+    let formatted_slider_stats = format_slider_misses(score)
+        .map(|s| format!(" •  {s}"))
+        .unwrap_or_default();
 
     let nc_stats = if is_fc(score, map_combo, map.count_sliders).not() {
         let nc_stats = calculate_nc_stats(perf_attrs, score);
@@ -73,10 +78,13 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         let nc_formatted_hits =
             format_hits(nc_stats.n300, nc_stats.n100, nc_stats.n50, nc_stats.miss);
 
-        format!(
-            "**If FC** (__{} PP__)  • {} • **{}%**\n",
-            nc_pp, nc_formatted_hits, nc_acc
-        )
+        let tail_miss = nc_stats.slider_tail_miss;
+
+        let nc_tail_misses = (tail_miss > 0)
+            .then(|| format!(" • **{tail_miss}**{TAIL_MISS_EMOJI}"))
+            .unwrap_or_default();
+
+        format!("**If FC** (__{nc_pp} PP__)  • {nc_formatted_hits} • **{nc_acc}%**{nc_tail_misses}\n")
     } else {
         Default::default()
     };
@@ -107,9 +115,11 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
 
     let embed_field_value = format!(
         "{}\n{}",
-        format!("**{pp}**/{max_pp} PP • {formatted_hits} • **{score_combo}**/{map_combo}x"),
         format!(
-            "{nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` {BPM_EMOJI} **{bpm}**"
+            "**{pp}**/{max_pp} PP • {formatted_hits} • **{score_combo}**/{map_combo}x {formatted_slider_stats}"
+        ),
+        format!(
+            "{nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` {BPM_EMOJI}  • **{bpm}**"
         )
     );
 
@@ -133,21 +143,19 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
 pub fn edit_pb(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
     let description = format!("**__Personal Best #{pb_index}__**  • Gained: **{pp_gained}pp**");
 
-    embed
-        .description(description)
+    embed.description(description)
 }
 
 pub fn edit_missing_pb(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
     let missing_text = "**[(?)](https://discord.com/channels/1297750821219467264/1297838959854096454/# \"the top200 did not include this score likely because the api wasn't done processing but presumably the score is in there\")**";
-    let description = format!("**__Personal Best #{pb_index}__** {missing_text}  • Gained: **{pp_gained}pp**");
+    let description =
+        format!("**__Personal Best #{pb_index}__** {missing_text}  • Gained: **{pp_gained}pp**");
 
-    embed
-        .description(description)
+    embed.description(description)
 }
 
 pub fn edit_if_ranked_pb(embed: CreateEmbed, pb_index: usize) -> CreateEmbed {
     let description = format!("__Personal Best #{pb_index}__ • **If Ranked**");
 
-    embed
-        .description(description)
+    embed.description(description)
 }
