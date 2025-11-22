@@ -67,7 +67,7 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
 
     let formatted_hits = format_hits(stats.great, stats.ok, stats.meh, stats.miss);
     let formatted_slider_stats = format_slider_misses(score)
-        .map(|s| format!(" •  {s}"))
+        .map(|s| format!(" •  **{s}**"))
         .unwrap_or_default();
 
     let nc_stats = if is_fc(score, map_combo, map.count_sliders).not() {

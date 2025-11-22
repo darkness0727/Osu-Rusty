@@ -59,7 +59,7 @@ pub async fn recent(
 
     let score = recent_scores[index - 1].clone();
     let map_id = score.map_id;
-
+    
     if let Err(err) = download_map_file(map_id).await {
         println!("{err}");
         check_reply_with_embed(&ctx, failed_embed()).await;
