@@ -1,4 +1,4 @@
-use std::{ops::Not, time::Duration};
+use std::{collections::HashMap, ops::Not, time::Duration};
 
 use crate::{
     Error, OSU_CLIENT,
@@ -17,6 +17,8 @@ use rosu_v2::{
 };
 use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
+
+pub static MAX_TOP_PLAY_COUNT: usize = 200;
 
 pub async fn login(client_id: u64, client_secret: String) -> Result<rosu_v2::Osu, OsuError> {
     rosu_v2::Osu::new(client_id, client_secret).await
@@ -49,44 +51,39 @@ pub async fn fetch_personal_bests(
 
 /// Returns if the score is present in the top200 and its index. if the PP is high enough be present in the top200, the index.
 pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult, Error> {
-    let top_ids  = top_plays.iter().map(|s| s.id);
-    let top_pps = top_plays.iter().map(|s| s.pp.unwrap_or(0.0));
+    let ranked = score.pp.is_some();
 
-    let mut score_pp = score.pp.unwrap_or_default();
+    let mut score_id_to_index = HashMap::with_capacity(top_plays.len());
+    let mut map_id_to_pp = HashMap::with_capacity(top_plays.len());
+    for (index, score) in top_plays.iter().enumerate() {
+        score_id_to_index.insert(score.id, index);
+        map_id_to_pp.insert(score.map_id, score.pp.unwrap_or_default());
+    }
 
-    if score.pp.is_none() {
-        download_map_file(score.map_id).await?;
-        let beatmap = load_local_beatmap(score.map_id)?;
-        score_pp = cal_score_pp_beatmap(&beatmap, score) as f32;
-    } else {
-        // check for score ID match
-        for (index, id) in top_ids.enumerate() {
-            if id == score.id {
-                return Ok(IsPbResult::InPB(index + 1));
-            }
-        }
+    // check for score ID match
+    if let Some(i) = score_id_to_index.get(&score.id) {
+        return Ok(IsPbResult::InPB(*i + 1));
+    }
 
-        // return NotPB if there is a different score on the same map with a higher PP
-        for top_score in top_plays.iter() {
-            if top_score.map_id == score.map_id && top_score.pp.unwrap_or(0.0) >= score_pp {
-                return Ok(IsPbResult::NotPB);
-            }
-        }
+    let score_pp = match score.pp {
+        Some(pp) => pp,
+        None => cal_pp_download_beatmap(score).await? as f32,
+    };
+
+    // return NotPB if there is a different score on the same map with a higher PP
+    if map_id_to_pp
+        .get(&score.map_id)
+        .is_some_and(|pp| *pp >= score_pp)
+    {
+        return Ok(IsPbResult::NotPB);
     }
 
     // return what index the play would be if it's pp is high enough to be a top200 score
-    for (index, pp) in top_pps.enumerate() {
-        if score_pp > pp {
-            if score.pp.is_none() {
-                return Ok(IsPbResult::IfRanked(index + 1));
-            }
-            {
-                return Ok(IsPbResult::MissingPB(index + 1));
-            }
-        }
+    match top_plays.binary_search_by(|s| score_pp.total_cmp(&s.pp.unwrap_or_default())) {
+        Err(pos) if ranked && pos < MAX_TOP_PLAY_COUNT => Ok(IsPbResult::MissingPB(pos + 1)),
+        Err(pos) if pos < MAX_TOP_PLAY_COUNT => Ok(IsPbResult::IfRanked(pos + 1)),
+        _ => Ok(IsPbResult::NotPB),
     }
-
-    Ok(IsPbResult::NotPB)
 }
 
 pub enum IsPbResult {
@@ -106,7 +103,10 @@ pub fn is_fc(score: &Score, map_combo: u32, slider_count: u32) -> bool {
     score.max_combo as f32 >= fc_threshold
 }
 
-pub fn cal_score_pp_beatmap(beatmap: &Beatmap, score: &Score) -> f64 {
+pub async fn cal_pp_download_beatmap(score: &Score) -> Result<f64, Error> {
+    download_map_file(score.map_id).await?;
+    let beatmap = &load_local_beatmap(score.map_id)?;
+
     let stats = &score.statistics;
     let is_classic = is_classic(&score.mods);
 
@@ -117,9 +117,9 @@ pub fn cal_score_pp_beatmap(beatmap: &Beatmap, score: &Score) -> f64 {
         .calculate_for_mode::<Osu_Pp>(beatmap)
         .unwrap();
 
-    let perf_attrs = rosu_pp::Performance::new(diff_attrs).mods(mods).calculate();
-
-    perf_attrs
+    let score_pp = rosu_pp::Performance::new(diff_attrs)
+        .mods(mods)
+        .calculate()
         .performance()
         .mods(score.mods.clone())
         .combo(score.max_combo)
@@ -132,7 +132,8 @@ pub fn cal_score_pp_beatmap(beatmap: &Beatmap, score: &Score) -> f64 {
         .n300(stats.great)
         .lazer(!is_classic)
         .calculate()
-        .pp()
+        .pp();
+    Ok(score_pp)
 }
 
 pub fn cal_score_pp_perf(perf_attrs: PerformanceAttributes, score: &Score) -> f64 {
@@ -252,10 +253,8 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
 
     let nc_pp = nc_attrs.pp();
 
-    let slider_tail_miss = is_classic
-        .not()
-        .then(|| max_stats.slider_tail_hit - stats.slider_tail_hit)
-        .unwrap_or(0);
+    let slider_tail_miss = if is_classic
+        .not() { max_stats.slider_tail_hit - stats.slider_tail_hit } else { 0 };
 
     NoChokeStats {
         n300: nc_300,
@@ -337,11 +336,11 @@ pub fn format_slider_misses(score: &Score) -> Option<String> {
     };
 
     let tick_miss_text = has_tick_miss
-        .then(|| format!("**{tick_miss}**{TICK_MISS_EMOJI}"))
+        .then(|| format!("{tick_miss}{TICK_MISS_EMOJI}"))
         .unwrap_or_default();
 
     let tail_miss_text = has_tail_miss
-        .then(|| format!("**{tail_miss}**{TAIL_MISS_EMOJI}"))
+        .then(|| format!("{tail_miss}{TAIL_MISS_EMOJI}"))
         .unwrap_or_default();
 
     Some(format!("{tick_miss_text}{tail_miss_text}"))
@@ -412,7 +411,7 @@ pub fn relative_timestamp(time: OffsetDateTime) -> String {
 
 pub static BPM_EMOJI: &str = "<:bpm:1437855552100368384>";
 pub static TICK_MISS_EMOJI: &str = "<:slider_tick_miss:1441484864049123399>";
-pub static TAIL_MISS_EMOJI: &str = "<:slider_tail_miss:1441484819698815129>";
+pub static TAIL_MISS_EMOJI: &str = "<:slider_tail_miss:1441692017775083642>";
 
 pub fn grade_emoji(grade: String) -> String {
     match grade.to_uppercase().as_str() {
