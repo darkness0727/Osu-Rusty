@@ -5,11 +5,10 @@ use crate::{
         recent::{create, edit_if_ranked_pb, edit_missing_pb, edit_pb},
     },
     utils::{
-        discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed},
-        osu_utils::{
-            IsPbResult, download_map_file, fetch_personal_bests, fetch_player, fetch_recent_scores,
-            is_in_pb, load_local_beatmap, pp_gained_from_play,
-        },
+        discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed}, osu_pp::{IsPbResult, is_in_pb, pp_gained_from_play}, osu_utils::{
+            download_map_file, fetch_personal_bests, fetch_player, fetch_recent_scores,
+            load_local_beatmap
+        }
     },
 };
 use poise::Context as PoiseContext;

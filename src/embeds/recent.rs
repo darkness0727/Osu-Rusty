@@ -7,12 +7,11 @@ use serenity::all::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter};
 use crate::{
     embeds::FAIL_EMBED_COLOR,
     utils::{
-        CommaFormat, CommaFormatFloat,
-        osu_utils::{
-            BPM_EMOJI, TAIL_MISS_EMOJI, cal_score_pp_perf, calculate_nc_stats, format_hits,
-            format_slider_misses, formated_song_length, get_flag_url, grade_emoji, is_fc,
-            map_stats, relative_timestamp, star_color_spectrum,
-        },
+        CommaFormat, CommaFormatFloat, osu_pp::{cal_score_pp_perf, calculate_nc_stats, is_fc, map_stats}, osu_utils::{
+            BPM_EMOJI, TAIL_MISS_EMOJI, format_hits,
+            format_slider_misses, formated_song_length, get_flag_url, grade_emoji,
+             relative_timestamp, star_color_spectrum,
+        }
     },
 };
 
