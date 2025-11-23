@@ -7,8 +7,8 @@ use crate::{
     utils::{
         discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed},
         osu_utils::{
-            IsPbResult, download_map_file, fetch_personal_bests, fetch_player,
-            fetch_recent_scores, is_in_pb, load_local_beatmap,
+            IsPbResult, download_map_file, fetch_personal_bests, fetch_player, fetch_recent_scores,
+            is_in_pb, load_local_beatmap, pp_gained_from_play,
         },
     },
 };
@@ -59,7 +59,7 @@ pub async fn recent(
 
     let score = recent_scores[index - 1].clone();
     let map_id = score.map_id;
-    
+
     if let Err(err) = download_map_file(map_id).await {
         println!("{err}");
         check_reply_with_embed(&ctx, failed_embed()).await;
@@ -86,13 +86,25 @@ pub async fn recent(
 
     top_plays.extend(top_plays_second);
 
-    let Ok(is_top_result) = is_in_pb(top_plays, &score).await else {
+    let Ok(is_top_result) = is_in_pb(top_plays.clone(), &score).await else {
         return Ok(());
     };
 
     let updated_embed = match is_top_result {
-        IsPbResult::InPB(index) => edit_pb(embed, index, 0.0),
-        IsPbResult::MissingPB(index) => edit_missing_pb(embed, index, 0.0),
+        IsPbResult::InPB(index) => edit_pb(
+            embed,
+            index,
+            pp_gained_from_play(top_plays, &score, name)
+                .await
+                .unwrap_or_default(),
+        ),
+        IsPbResult::MissingPB(index) => edit_missing_pb(
+            embed,
+            index,
+            pp_gained_from_play(top_plays, &score, name)
+                .await
+                .unwrap_or_default(),
+        ),
         IsPbResult::IfRanked(index) => edit_if_ranked_pb(embed, index),
         IsPbResult::NotPB => return Ok(()),
     };

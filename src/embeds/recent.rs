@@ -67,7 +67,7 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
 
     let formatted_hits = format_hits(stats.great, stats.ok, stats.meh, stats.miss);
     let formatted_slider_stats = format_slider_misses(score)
-        .map(|s| format!(" •  **{s}**"))
+        .map(|s| format!(" •  {s}"))
         .unwrap_or_default();
 
     let nc_stats = if is_fc(score, map_combo, map.count_sliders).not() {
@@ -81,10 +81,12 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         let tail_miss = nc_stats.slider_tail_miss;
 
         let nc_tail_misses = (tail_miss > 0)
-            .then(|| format!(" • **{tail_miss}**{TAIL_MISS_EMOJI}"))
+            .then(|| format!(" • {tail_miss}{TAIL_MISS_EMOJI}"))
             .unwrap_or_default();
 
-        format!("**If FC** (__{nc_pp} PP__)  • {nc_formatted_hits} • **{nc_acc}%**{nc_tail_misses}\n")
+        format!(
+            "**If FC** (__{nc_pp} PP__)  • {nc_formatted_hits} • **{nc_acc}%**{nc_tail_misses}\n"
+        )
     } else {
         Default::default()
     };
@@ -119,7 +121,7 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
             "**{pp}**/{max_pp} PP • {formatted_hits} • **{score_combo}**/{map_combo}x {formatted_slider_stats}"
         ),
         format!(
-            "{nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` {BPM_EMOJI}  • **{bpm}**"
+            "{nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` • {BPM_EMOJI} **{bpm}**"
         )
     );
 
@@ -140,16 +142,23 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         .color(star_color_spectrum(stars))
 }
 
+static PP_GAINED_TEXT: &str = "**[(?)](https://discord.com/channels/1297750821219467264/1297838959854096454/# \"the amount of raw profile PP gained from this play accounting for previous scores on the map, this does not include bonus PP and the value is only accurate if this is the most recent top play\")**";
+static MISSING_TEXT: &str = "**[(?)](https://discord.com/channels/1297750821219467264/1297838959854096454/# \"the top200 did not include this score likely because the api wasn't done processing but presumably the score is in there\")**";
+
 pub fn edit_pb(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
-    let description = format!("**__Personal Best #{pb_index}__**  • Gained: **{pp_gained}pp**");
+    let description = format!(
+        "**__Personal Best #{pb_index}__**  • Gained: **{}pp** {PP_GAINED_TEXT}",
+        pp_gained.two_decimal()
+    );
 
     embed.description(description)
 }
 
 pub fn edit_missing_pb(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
-    let missing_text = "**[(?)](https://discord.com/channels/1297750821219467264/1297838959854096454/# \"the top200 did not include this score likely because the api wasn't done processing but presumably the score is in there\")**";
-    let description =
-        format!("**__Personal Best #{pb_index}__** {missing_text}  • Gained: **{pp_gained}pp**");
+    let description = format!(
+        "**__Personal Best #{pb_index}__** {MISSING_TEXT}  • Gained: **{}pp** {PP_GAINED_TEXT}",
+        pp_gained.two_decimal()
+    );
 
     embed.description(description)
 }

@@ -35,6 +35,12 @@ pub async fn fetch_recent_scores(name: String, amount: usize) -> Result<Vec<Scor
     osu.user_scores(&name).recent().limit(amount).await
 }
 
+pub async fn fetch_map_scores(name: String, map_id: u32) -> Result<Vec<Score>, OsuError> {
+    let osu = OSU_CLIENT.get().unwrap();
+
+    osu.beatmap_user_scores(map_id, name).await
+}
+
 pub async fn fetch_personal_bests(
     name: String,
     amount: usize,
@@ -91,6 +97,90 @@ pub enum IsPbResult {
     MissingPB(usize),
     IfRanked(usize),
     NotPB,
+}
+/// how much raw profile PP gained from a play accounting for previous scores
+/// only accurate if the score is your most recent top play, as otherwise 
+/// the top plays have changed making the value inaccurate
+pub async fn pp_gained_from_play(
+    top_plays: Vec<Score>,
+    score: &Score,
+    username: String,
+) -> Result<f32, Error> {
+    let Some(score_pp) = score.pp else {
+        return Err("score is not ranked".into());
+    };
+
+    let mut top_without_score: Vec<Score> = Vec::with_capacity(top_plays.len());
+    let mut add_extra_pp = false;
+
+    for top_s in top_plays.iter() {
+        // remove the score
+        if score.id == top_s.id
+            || (score.map_id == top_s.map_id && score_pp > top_s.pp.unwrap_or_default())
+        {
+            add_extra_pp = top_plays.len() >= MAX_TOP_PLAY_COUNT;
+            continue;
+        }
+
+        // no PP gained if equal or better score already exists
+        if score.map_id == top_s.map_id {
+            return Err("better score found in top".into());
+        }
+
+        top_without_score.push(top_s.clone());
+    }
+
+    let mut top_pps: Vec<f32> = top_without_score
+        .iter()
+        .map(|s| s.pp.unwrap_or_default())
+        .collect();
+
+    // to compensate for the removed score we add another copy of the lowest PP score
+    // if the user has 200 scores (then likely they have more scores outside of top 200)
+    if add_extra_pp {
+        top_pps.sort_by(|a, b| b.total_cmp(a));
+        top_pps.push(*top_pps.last().unwrap_or(&0.0));
+    }
+    let map_scores = fetch_map_scores(username, score.map_id).await?;
+
+    // remove newer map scores than the score, newer score cant be higher in PP
+    // because we return if a newer score with higher PP is found;
+    let filtered_map_pps = map_scores
+        .iter()
+        .filter(|s| score.ended_at > s.ended_at && score.id != s.id)
+        .map(|s| s.pp.unwrap_or_default());
+
+    let prev_score_pp = filtered_map_pps.reduce(f32::max).unwrap_or_default();
+    let pp_from_current_score = what_if_pp(top_pps.clone(), score_pp);
+    let pp_from_prev_score = what_if_pp(top_pps, prev_score_pp);
+
+    let pp_gained = (pp_from_current_score - pp_from_prev_score) as f32;
+
+    Ok(pp_gained)
+}
+
+/// check how much raw profile PP you would get from a score
+pub fn what_if_pp(mut top_pps: Vec<f32>, score_pp: f32) -> f64 {
+    top_pps.sort_by(|a, b| b.total_cmp(a));
+    top_pps.truncate(MAX_TOP_PLAY_COUNT);
+
+    let weighted_total_before: f64 = top_pps
+        .iter()
+        .enumerate()
+        .map(|(index, pp)| *pp as f64 * 0.95f64.powi(index as i32))
+        .sum();
+
+    top_pps.push(score_pp);
+    top_pps.sort_by(|a, b| b.total_cmp(a));
+    top_pps.truncate(MAX_TOP_PLAY_COUNT);
+
+    let weighted_total_after: f64 = top_pps
+        .iter()
+        .enumerate()
+        .map(|(index, pp)| *pp as f64 * 0.95f64.powi(index as i32))
+        .sum();
+
+    weighted_total_after - weighted_total_before
 }
 
 pub fn is_fc(score: &Score, map_combo: u32, slider_count: u32) -> bool {
@@ -253,8 +343,11 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
 
     let nc_pp = nc_attrs.pp();
 
-    let slider_tail_miss = if is_classic
-        .not() { max_stats.slider_tail_hit - stats.slider_tail_hit } else { 0 };
+    let slider_tail_miss = if is_classic.not() {
+        max_stats.slider_tail_hit - stats.slider_tail_hit
+    } else {
+        0
+    };
 
     NoChokeStats {
         n300: nc_300,
