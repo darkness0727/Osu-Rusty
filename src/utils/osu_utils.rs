@@ -8,8 +8,7 @@ use crate::{
 use num_traits::clamp_min;
 use rosu_pp::Beatmap;
 use rosu_v2::{
-    error::OsuError,
-    prelude::{Score, UserExtended},
+    error::OsuError, model::Grade, prelude::{Score, UserExtended}
 };
 use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
@@ -28,7 +27,7 @@ pub async fn fetch_player(name: String) -> Result<UserExtended, OsuError> {
 pub async fn fetch_recent_scores(name: String, amount: usize) -> Result<Vec<Score>, OsuError> {
     let osu = OSU_CLIENT.get().unwrap();
 
-    osu.user_scores(&name).recent().limit(amount).await
+    osu.user_scores(&name).recent().limit(amount).include_fails(true).await
 }
 
 pub async fn fetch_map_scores(name: String, map_id: u32) -> Result<Vec<Score>, OsuError> {
@@ -171,18 +170,17 @@ pub static BPM_EMOJI: &str = "<:bpm:1437855552100368384>";
 pub static TICK_MISS_EMOJI: &str = "<:slider_tick_miss:1441484864049123399>";
 pub static TAIL_MISS_EMOJI: &str = "<:slider_tail_miss:1441692017775083642>";
 
-pub fn grade_emoji(grade: String) -> String {
-    match grade.to_uppercase().as_str() {
-        "SS" => "<:SS:1346458936596889640>".to_string(),
-        "S" => "<:S_:1346458998425128990>".to_string(),
-        "XH" => "<:SSH:1346459029656047646>".to_string(),
-        "SH" => "<:SH:1346459119741046794>".to_string(),
-        "A" => "<:A_:1346459159935193139>".to_string(),
-        "B" => "<:B_:1346459185512054814>".to_string(),
-        "C" => "<:C_:1346459204847796264>".to_string(),
-        "D" => "<:D_:1347295031756587039>".to_string(),
-        "F" => "<:F_:1346460123173879859>".to_string(),
-        _ => "invalid_grade".to_string(),
+pub fn grade_emoji(grade: Grade) -> String {
+    match grade {
+        Grade::X => "<:SS:1346458936596889640>".to_string(),
+        Grade::S => "<:S_:1346458998425128990>".to_string(),
+        Grade::XH => "<:SSH:1346459029656047646>".to_string(),
+        Grade::SH => "<:SH:1346459119741046794>".to_string(),
+        Grade::A => "<:A_:1346459159935193139>".to_string(),
+        Grade::B => "<:B_:1346459185512054814>".to_string(),
+        Grade::C => "<:C_:1346459204847796264>".to_string(),
+        Grade::D => "<:D_:1347295031756587039>".to_string(),
+        Grade::F => "<:F_:1346460123173879859>".to_string(),
     }
 }
 
