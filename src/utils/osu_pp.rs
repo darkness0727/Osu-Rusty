@@ -2,15 +2,20 @@ use std::{collections::HashMap, ops::Not};
 
 use crate::{
     Error,
-    utils::{CommaFormatFloat, osu_utils::{MAX_TOP_PLAY_COUNT, download_map_file, fetch_map_scores, load_local_beatmap}},
+    utils::{
+        CommaFormatFloat,
+        osu_utils::{MAX_TOP_PLAY_COUNT, download_map_file, fetch_map_scores, load_local_beatmap},
+    },
 };
 use rosu_pp::{
-    Beatmap,
-    any::PerformanceAttributes,
+    Beatmap, Difficulty, GradualPerformance,
+    any::{PerformanceAttributes, ScoreState},
     osu::{Osu as Osu_Pp, OsuScoreOrigin, OsuScoreState},
 };
-use rosu_v2::prelude::{GameMod, GameMods, Score};
-
+use rosu_v2::{
+    model::Grade,
+    prelude::{GameMod, GameMods, Score},
+};
 
 pub fn is_classic(mods: &GameMods) -> bool {
     mods.iter().any(|m| matches!(m, &GameMod::ClassicOsu(_)))
@@ -60,7 +65,7 @@ pub enum IsPbResult {
     NotPB,
 }
 /// how much raw profile PP gained from a play accounting for previous scores
-/// only accurate if the score is your most recent top play, as otherwise 
+/// only accurate if the score is your most recent top play, as otherwise
 /// the top plays have changed making the value inaccurate
 pub async fn pp_gained_from_play(
     top_plays: Vec<Score>,
@@ -206,6 +211,36 @@ pub fn cal_score_pp_perf(perf_attrs: PerformanceAttributes, score: &Score) -> f6
         .pp()
 }
 
+pub fn cal_failed_pp(score: &Score, mods: GameMods, beatmap: &Beatmap) -> Option<f64> {
+    let stats = &score.statistics;
+    let difficulty = Difficulty::new().mods(mods.clone());
+    let mut gradual = GradualPerformance::new(difficulty, beatmap);
+
+    let mut state = ScoreState {
+        n300: stats.great,
+        n100: stats.ok,
+        n50: stats.meh,
+        misses: stats.miss,
+        slider_end_hits: stats.slider_tail_hit,
+        osu_large_tick_hits: stats.large_tick_hit,
+        osu_small_tick_hits: stats.small_tick_hit,
+        max_combo: score.max_combo,
+        ..ScoreState::new()
+    };
+
+    if is_classic(&mods).not() {
+        state.slider_end_hits = stats.slider_tail_hit;
+        state.osu_small_tick_hits = stats.small_tick_hit;
+        state.osu_large_tick_hits = stats.large_tick_hit;
+    }
+
+    let objects_hit = (stats.great + stats.ok + stats.meh + stats.miss) as usize;
+
+    let pp = gradual.nth(state, objects_hit - 1)?.pp();
+
+    return Some(pp);
+}
+
 pub fn map_stats(
     beatmap: &Beatmap,
     mods: GameMods,
@@ -262,9 +297,18 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
     let ratio_300 = stats.great as f32 / total_hits as f32;
     let ratio_100 = stats.ok as f32 / total_hits as f32;
 
-    let miss_to_300 = (stats.miss as f32 * ratio_300).round() as u32;
-    let miss_to_100 = (stats.miss as f32 * ratio_100).round() as u32;
-    let miss_to_50 = stats.miss - (miss_to_300 + miss_to_100);
+    let is_fail = score.grade == Grade::F;
+
+    let misses = is_fail
+        .then(|| max_stats.great - total_hits)
+        .unwrap_or(stats.miss);
+    let tail_hits = is_fail
+        .then(|| max_stats.slider_tail_hit)
+        .unwrap_or(stats.slider_tail_hit);
+
+    let miss_to_300 = (misses as f32 * ratio_300).round() as u32;
+    let miss_to_100 = (misses as f32 * ratio_100).round() as u32;
+    let miss_to_50 = misses - (miss_to_300 + miss_to_100);
 
     let (nc_300, nc_100, nc_50) = (
         stats.great + miss_to_300,
@@ -277,7 +321,7 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
         n100: nc_100,
         n50: nc_50,
         misses: 0,
-        slider_end_hits: stats.slider_tail_hit,
+        slider_end_hits: tail_hits,
         large_tick_hits: max_stats.large_tick_hit,
         small_tick_hits: max_stats.small_tick_hit,
         ..OsuScoreState::new()
@@ -288,7 +332,7 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
     } else {
         state.accuracy(OsuScoreOrigin::WithSliderAcc {
             max_large_ticks: max_stats.large_tick_hit,
-            max_slider_ends: stats.slider_tail_hit,
+            max_slider_ends: tail_hits,
         }) * 100.0
     };
 
@@ -298,7 +342,8 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
         .n300(nc_300)
         .n100(nc_100)
         .n50(nc_50)
-        .slider_end_hits(stats.slider_tail_hit)
+        .slider_end_hits(tail_hits
+        )
         .lazer(!is_classic)
         .calculate();
 

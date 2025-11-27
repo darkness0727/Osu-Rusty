@@ -172,15 +172,15 @@ pub static TAIL_MISS_EMOJI: &str = "<:slider_tail_miss:1441692017775083642>";
 
 pub fn grade_emoji(grade: Grade) -> String {
     match grade {
-        Grade::X => "<:SS:1346458936596889640>".to_string(),
-        Grade::S => "<:S_:1346458998425128990>".to_string(),
-        Grade::XH => "<:SSH:1346459029656047646>".to_string(),
-        Grade::SH => "<:SH:1346459119741046794>".to_string(),
-        Grade::A => "<:A_:1346459159935193139>".to_string(),
-        Grade::B => "<:B_:1346459185512054814>".to_string(),
-        Grade::C => "<:C_:1346459204847796264>".to_string(),
-        Grade::D => "<:D_:1347295031756587039>".to_string(),
-        Grade::F => "<:F_:1346460123173879859>".to_string(),
+        Grade::X => String::from("<:SS:1346458936596889640>"),
+        Grade::S => String::from("<:S_:1346458998425128990>"),
+        Grade::XH => String::from("<:SSH:1346459029656047646>"),
+        Grade::SH => String::from("<:SH:1346459119741046794>"),
+        Grade::A => String::from("<:A_:1346459159935193139>"),
+        Grade::B => String::from("<:B_:1346459185512054814>"),
+        Grade::C => String::from("<:C_:1346459204847796264>"),
+        Grade::D => String::from("<:D_:1347295031756587039>"),
+        Grade::F => String::from("<:F_:1346460123173879859>"),
     }
 }
 

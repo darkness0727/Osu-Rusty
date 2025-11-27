@@ -1,17 +1,21 @@
 use std::ops::Not;
 
 use rosu_pp::Beatmap;
-use rosu_v2::prelude::{Score, UserExtended};
+use rosu_v2::{
+    model::Grade,
+    prelude::{Score, UserExtended},
+};
 use serenity::all::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter};
 
 use crate::{
     embeds::FAIL_EMBED_COLOR,
     utils::{
-        CommaFormat, CommaFormatFloat, osu_pp::{cal_score_pp_perf, calculate_nc_stats, is_fc, map_stats}, osu_utils::{
-            BPM_EMOJI, TAIL_MISS_EMOJI, format_hits,
-            format_slider_misses, formated_song_length, get_flag_url, grade_emoji,
-             relative_timestamp, star_color_spectrum,
-        }
+        CommaFormat, CommaFormatFloat,
+        osu_pp::{cal_failed_pp, cal_score_pp_perf, calculate_nc_stats, is_fc, map_stats},
+        osu_utils::{
+            BPM_EMOJI, TAIL_MISS_EMOJI, format_hits, format_slider_misses, formated_song_length,
+            get_flag_url, grade_emoji, relative_timestamp, star_color_spectrum,
+        },
     },
 };
 
@@ -57,10 +61,16 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
     let stars = map_stats.stars.two_decimal();
     let score_combo = score.max_combo;
     let map_combo = map_stats.combo;
-    let pp = score
-        .pp
-        .unwrap_or_else(|| cal_score_pp_perf(perf_attrs.clone(), score) as f32)
-        .two_decimal();
+    let pp = if score.grade == Grade::F {
+        cal_failed_pp(score, score.mods.clone(), &beatmap)
+            .unwrap_or_default()
+            .two_decimal()
+    } else {
+        score
+            .pp
+            .unwrap_or_else(|| cal_score_pp_perf(perf_attrs.clone(), score) as f32)
+            .two_decimal()
+    };
 
     let stats = &score.statistics;
 
@@ -107,7 +117,7 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
 
     let embed_field_name = format!(
         "{}\t{}%\t{}\t{}\t{}",
-        grade_emoji(score.grade.to_string()),
+        grade_emoji(score.grade),
         score.accuracy.two_decimal(),
         formatted_mods,
         score.score.format(),
