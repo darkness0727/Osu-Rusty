@@ -5,10 +5,12 @@ use crate::{
         recent::{create, edit_if_ranked_pb, edit_missing_pb, edit_pb},
     },
     utils::{
-        discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed}, osu_pp::{IsPbResult, is_in_pb, pp_gained_from_play}, osu_utils::{
+        discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed},
+        osu_pp::{IsPbResult, is_in_pb, pp_gained_from_play},
+        osu_utils::{
             download_map_file, fetch_personal_bests, fetch_player, fetch_recent_scores,
-            load_local_beatmap
-        }
+            load_local_beatmap,
+        },
     },
 };
 use poise::Context as PoiseContext;
@@ -30,7 +32,7 @@ pub async fn recent(
     let index = index.unwrap_or(1);
 
     let player_handle = tokio::spawn(fetch_player(name.clone()));
-    let scores_handle = tokio::spawn(fetch_recent_scores(name.clone(), index));
+    let scores_handle = tokio::spawn(fetch_recent_scores(name.clone(), index, true));
     let top_plays_handle = tokio::spawn(fetch_personal_bests(name.clone(), 100, 0));
     let top_plays_handle2 = tokio::spawn(fetch_personal_bests(name.clone(), 100, 100));
 
@@ -84,6 +86,10 @@ pub async fn recent(
     };
 
     top_plays.extend(top_plays_second);
+
+    if !score.passed {
+        return Ok(());
+    };
 
     let Ok(is_top_result) = is_in_pb(top_plays.clone(), &score).await else {
         return Ok(());

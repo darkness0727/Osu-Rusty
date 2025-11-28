@@ -12,10 +12,7 @@ use rosu_pp::{
     any::{PerformanceAttributes, ScoreState},
     osu::{Osu as Osu_Pp, OsuScoreOrigin, OsuScoreState},
 };
-use rosu_v2::{
-    model::Grade,
-    prelude::{GameMod, GameMods, Score},
-};
+use rosu_v2::prelude::{GameMod, GameMods, Score}; 
 
 pub fn is_classic(mods: &GameMods) -> bool {
     mods.iter().any(|m| matches!(m, &GameMod::ClassicOsu(_)))
@@ -234,11 +231,11 @@ pub fn cal_failed_pp(score: &Score, mods: GameMods, beatmap: &Beatmap) -> Option
         state.osu_large_tick_hits = stats.large_tick_hit;
     }
 
-    let objects_hit = (stats.great + stats.ok + stats.meh + stats.miss) as usize;
+    let objects_hit = score.total_hits() as usize;
 
     let pp = gradual.nth(state, objects_hit - 1)?.pp();
 
-    return Some(pp);
+    Some(pp)
 }
 
 pub fn map_stats(
@@ -297,14 +294,10 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
     let ratio_300 = stats.great as f32 / total_hits as f32;
     let ratio_100 = stats.ok as f32 / total_hits as f32;
 
-    let is_fail = score.grade == Grade::F;
+    let is_fail = !score.passed;
 
-    let misses = is_fail
-        .then(|| max_stats.great - total_hits)
-        .unwrap_or(stats.miss);
-    let tail_hits = is_fail
-        .then(|| max_stats.slider_tail_hit)
-        .unwrap_or(stats.slider_tail_hit);
+    let misses = if is_fail { max_stats.great - total_hits } else { stats.miss };
+    let tail_hits = if is_fail { max_stats.slider_tail_hit } else { stats.slider_tail_hit };
 
     let miss_to_300 = (misses as f32 * ratio_300).round() as u32;
     let miss_to_100 = (misses as f32 * ratio_100).round() as u32;
@@ -349,7 +342,7 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
 
     let nc_pp = nc_attrs.pp();
 
-    let slider_tail_miss = if is_classic.not() {
+    let slider_tail_miss = if is_classic.not() && is_fail.not() {
         max_stats.slider_tail_hit - stats.slider_tail_hit
     } else {
         0

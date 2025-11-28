@@ -65,19 +65,27 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         cal_failed_pp(score, score.mods.clone(), &beatmap)
             .unwrap_or_default()
             .two_decimal()
-    } else {
-        score
+        } else {
+            score
             .pp
             .unwrap_or_else(|| cal_score_pp_perf(perf_attrs.clone(), score) as f32)
             .two_decimal()
-    };
-
-    let stats = &score.statistics;
-
-    let formatted_hits = format_hits(stats.great, stats.ok, stats.meh, stats.miss);
-    let formatted_slider_stats = format_slider_misses(score)
+        };
+        
+        let stats = &score.statistics;
+        
+        let formatted_hits = format_hits(stats.great, stats.ok, stats.meh, stats.miss);
+        let formatted_slider_stats = format_slider_misses(score)
         .map(|s| format!(" •  {s}"))
         .unwrap_or_default();
+    
+    let failed_percent = if !score.passed {
+        let percentage =
+            (score.total_hits() as f32 / score.maximum_statistics.great as f32 * 100.0).round();
+        format!("@{percentage}%",)
+    } else {
+        String::from("")
+    };
 
     let nc_stats = if is_fc(score, map_combo, map.count_sliders).not() {
         let nc_stats = calculate_nc_stats(perf_attrs, score);
@@ -115,9 +123,11 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         stars.format()
     );
 
+
     let embed_field_name = format!(
-        "{}\t{}%\t{}\t{}\t{}",
+        "{}{}\t{}%\t{}\t{}\t{}",
         grade_emoji(score.grade),
+        failed_percent,
         score.accuracy.two_decimal(),
         formatted_mods,
         score.score.format(),

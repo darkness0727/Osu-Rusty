@@ -8,7 +8,9 @@ use crate::{
 use num_traits::clamp_min;
 use rosu_pp::Beatmap;
 use rosu_v2::{
-    error::OsuError, model::Grade, prelude::{Score, UserExtended}
+    error::OsuError,
+    model::Grade,
+    prelude::{Score, UserExtended},
 };
 use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
@@ -24,10 +26,18 @@ pub async fn fetch_player(name: String) -> Result<UserExtended, OsuError> {
     osu.user(&name).await
 }
 
-pub async fn fetch_recent_scores(name: String, amount: usize) -> Result<Vec<Score>, OsuError> {
+pub async fn fetch_recent_scores(
+    name: String,
+    amount: usize,
+    include_false: bool,
+) -> Result<Vec<Score>, OsuError> {
     let osu = OSU_CLIENT.get().unwrap();
 
-    osu.user_scores(&name).recent().limit(amount).include_fails(true).await
+    osu.user_scores(&name)
+        .recent()
+        .limit(amount)
+        .include_fails(include_false)
+        .await
 }
 
 pub async fn fetch_map_scores(name: String, map_id: u32) -> Result<Vec<Score>, OsuError> {
@@ -100,9 +110,13 @@ pub fn format_slider_misses(score: &Score) -> Option<String> {
         .then(|| format!("{tick_miss}{TICK_MISS_EMOJI}"))
         .unwrap_or_default();
 
-    let tail_miss_text = has_tail_miss
-        .then(|| format!("{tail_miss}{TAIL_MISS_EMOJI}"))
-        .unwrap_or_default();
+    let tail_miss_text = if score.passed {
+        has_tail_miss
+            .then(|| format!("{tail_miss}{TAIL_MISS_EMOJI}"))
+            .unwrap_or_default()
+    } else {
+        format!("?{TAIL_MISS_EMOJI}")
+    };
 
     Some(format!("{tick_miss_text}{tail_miss_text}"))
 }
