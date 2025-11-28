@@ -8,7 +8,7 @@ use crate::{
         discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed},
         osu_pp::{IsPbResult, is_in_pb, pp_gained_from_play},
         osu_utils::{
-            download_map_file, fetch_personal_bests, fetch_player, fetch_recent_scores,
+            download_map_file, fetch_all_personal_bests, fetch_player, fetch_recent_scores,
             load_local_beatmap,
         },
     },
@@ -22,20 +22,24 @@ use poise::Context as PoiseContext;
     guild_only = false,
     install_context = "Guild|User",
     interaction_context = "Guild|BotDm|PrivateChannel",
-    aliases("rs", "r", "r")
+    aliases("rs", "r")
 )]
 pub async fn recent(
     ctx: PoiseContext<'_, (), Error>,
     #[description = "Specify a user"] name: String,
     #[description = "Specify which score"] index: Option<usize>,
+    #[description = "Should only contain passes"] pass: Option<bool>,
 ) -> Result<(), Error> {
     let index = index.unwrap_or(1);
+    let only_passes = pass.unwrap_or_default();
 
     let player_handle = tokio::spawn(fetch_player(name.clone()));
-    let scores_handle = tokio::spawn(fetch_recent_scores(name.clone(), index, true));
-    let top_plays_handle = tokio::spawn(fetch_personal_bests(name.clone(), 100, 0));
-    let top_plays_handle2 = tokio::spawn(fetch_personal_bests(name.clone(), 100, 100));
-
+    let scores_handle = tokio::spawn(fetch_recent_scores(
+        name.clone(),
+        index,
+        !only_passes,
+    ));
+    let top_plays_handle = tokio::spawn(fetch_all_personal_bests(name.clone()));
     let player = match player_handle.await {
         Ok(Ok(player)) => player,
         _ => {
@@ -53,7 +57,7 @@ pub async fn recent(
 
     let length = recent_scores.len();
     if length < index {
-        let embed = not_enough_scores(name, length);
+        let embed = not_enough_scores(name, length, only_passes);
         check_reply_with_embed(&ctx, embed).await;
         return Ok(());
     }
@@ -77,17 +81,11 @@ pub async fn recent(
 
     let msg_handle = reply_with_embed(&ctx, embed.clone()).await?;
 
-    let Ok(Ok(mut top_plays)) = top_plays_handle.await else {
-        return Ok(());
-    };
-
-    let Ok(Ok(top_plays_second)) = top_plays_handle2.await else {
-        return Ok(());
-    };
-
-    top_plays.extend(top_plays_second);
-
     if !score.passed {
+        return Ok(());
+    };
+
+    let Ok(Ok(top_plays)) = top_plays_handle.await else {
         return Ok(());
     };
 

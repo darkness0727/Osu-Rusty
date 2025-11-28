@@ -60,6 +60,32 @@ pub async fn fetch_personal_bests(
         .await
 }
 
+pub async fn fetch_all_personal_bests(name: String) -> Result<Vec<Score>, Error> {
+    let osu = OSU_CLIENT.get().unwrap();
+
+    let top_plays_handle = tokio::spawn(
+        osu.user_scores(&name)
+            .best()
+            .limit(100)
+            .offset(0)
+            .into_future(),
+    );
+    let top_plays_handle2 = tokio::spawn(
+        osu.user_scores(&name)
+            .best()
+            .limit(100)
+            .offset(100)
+            .into_future(),
+    );
+
+    let mut top_plays = top_plays_handle.await??;
+    let top_plays_second = top_plays_handle2.await??;
+
+    top_plays.extend(top_plays_second);
+
+    Ok(top_plays)
+}
+
 pub async fn download_map_file(map_id: u32) -> Result<String, Error> {
     let file_name = format!("{}.osu", map_id);
 
@@ -91,10 +117,9 @@ pub fn format_hits(n300: u32, n100: u32, n50: u32, miss: u32) -> String {
 }
 
 pub fn format_slider_misses(score: &Score, map: Beatmap) -> Option<String> {
+    let stats = slider_tail_tick_miss(score, &map)?;
 
-    let stats = slider_tail_tick_miss(score, &map)?; 
-
-    let tick_miss  = stats.tick_miss;
+    let tick_miss = stats.tick_miss;
     let tail_miss = stats.tail_miss;
 
     let has_tick_miss = tick_miss > 0;
