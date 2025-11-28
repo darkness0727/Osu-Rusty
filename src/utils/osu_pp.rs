@@ -293,7 +293,7 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
     let max_stats = &score.maximum_statistics;
     let is_classic = is_classic(&score.mods);
 
-    let total_hits = stats.great + stats.ok + stats.meh;
+    let total_hits = score.total_hits();
     let ratio_300 = stats.great as f32 / total_hits as f32;
     let ratio_100 = stats.ok as f32 / total_hits as f32;
 
