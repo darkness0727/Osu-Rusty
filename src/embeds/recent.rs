@@ -65,30 +65,17 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         cal_failed_pp(score, score.mods.clone(), &beatmap)
             .unwrap_or_default()
             .two_decimal()
-        } else {
-            score
+    } else {
+        score
             .pp
             .unwrap_or_else(|| cal_score_pp_perf(perf_attrs.clone(), score) as f32)
             .two_decimal()
-        };
-        
-        let stats = &score.statistics;
-        
-        let formatted_hits = format_hits(stats.great, stats.ok, stats.meh, stats.miss);
-        let formatted_slider_stats = format_slider_misses(score)
-        .map(|s| format!(" •  {s}"))
-        .unwrap_or_default();
-    
-    let failed_percent = if !score.passed {
-        let percentage =
-            (score.total_hits() as f32 / score.maximum_statistics.great as f32 * 100.0).round();
-        format!("@{percentage}%",)
-    } else {
-        String::from("")
     };
 
+    let stats = &score.statistics;
+
     let nc_stats = if is_fc(score, map_combo, map.count_sliders).not() {
-        let nc_stats = calculate_nc_stats(perf_attrs, score);
+        let nc_stats = calculate_nc_stats(perf_attrs, score, Some(&beatmap));
 
         let nc_pp = nc_stats.pp.format();
         let nc_acc = nc_stats.acc.two_decimal();
@@ -108,6 +95,19 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         Default::default()
     };
 
+    let formatted_hits = format_hits(stats.great, stats.ok, stats.meh, stats.miss);
+    let formatted_slider_stats = format_slider_misses(score, beatmap)
+        .map(|s| format!(" •  {s}"))
+        .unwrap_or_default();
+
+    let failed_percent = if !score.passed {
+        let percentage =
+            (score.total_hits() as f32 / score.maximum_statistics.great as f32 * 100.0).round();
+        format!("@{percentage}%",)
+    } else {
+        String::from("")
+    };
+
     let embed_author = CreateEmbedAuthor::new("")
         .name(format!(
             "{player_name}: {player_pp}pp (#{global_rank} {country_code}{country_rank})"
@@ -122,7 +122,6 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         map.version,
         stars.format()
     );
-
 
     let embed_field_name = format!(
         "{}{}\t{}%\t{}\t{}\t{}",

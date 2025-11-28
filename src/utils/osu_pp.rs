@@ -10,9 +10,50 @@ use crate::{
 use rosu_pp::{
     Beatmap, Difficulty, GradualPerformance,
     any::{PerformanceAttributes, ScoreState},
+    model::hit_object::HitObjectKind,
     osu::{Osu as Osu_Pp, OsuScoreOrigin, OsuScoreState},
 };
-use rosu_v2::prelude::{GameMod, GameMods, Score}; 
+use rosu_v2::{
+    model::Grade,
+    prelude::{GameMod, GameMods, Score},
+};
+
+pub fn slider_tail_tick_miss(score: &Score, map: &Beatmap) -> Option<TailTickMissResult> {
+    if is_classic(&score.mods) {
+        return None;
+    };
+
+    let stats = &score.statistics;
+
+    let tick_miss = stats.small_tick_miss + stats.large_tick_miss;
+    let tail_miss = if !score.passed {
+        let total_hits = (score.total_hits() as usize).clamp(1, map.hit_objects.len());
+
+        let total_slider_ends: usize = map
+            .hit_objects
+            .iter()
+            .take(total_hits)
+            .map(|obj| match &obj.kind {
+                HitObjectKind::Slider(_) => 1,
+                _ => 0,
+            })
+            .sum();
+
+        total_slider_ends as u32 - stats.slider_tail_hit
+    } else {
+        score.maximum_statistics.slider_tail_hit - stats.slider_tail_hit
+    };
+
+    Some(TailTickMissResult {
+        tick_miss,
+        tail_miss,
+    })
+}
+
+pub struct TailTickMissResult {
+    pub tick_miss: u32,
+    pub tail_miss: u32,
+}
 
 pub fn is_classic(mods: &GameMods) -> bool {
     mods.iter().any(|m| matches!(m, &GameMod::ClassicOsu(_)))
@@ -149,7 +190,8 @@ pub fn what_if_pp(mut top_pps: Vec<f32>, score_pp: f32) -> f64 {
 pub fn is_fc(score: &Score, map_combo: u32, slider_count: u32) -> bool {
     if !is_classic(&score.mods) {
         let stats = &score.statistics;
-        return stats.miss + stats.small_tick_miss + stats.large_tick_miss == 0;
+        return stats.miss + stats.small_tick_miss + stats.large_tick_miss == 0
+            && score.grade != Grade::F;
     }
 
     let fc_threshold = map_combo as f32 - 0.1 * slider_count as f32;
@@ -285,19 +327,38 @@ pub fn map_stats(
     )
 }
 
-pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> NoChokeStats {
+pub fn calculate_nc_stats(
+    perf_attrs: PerformanceAttributes,
+    score: &Score,
+    beatmap: Option<&Beatmap>,
+) -> NoChokeStats {
     let stats = &score.statistics;
     let max_stats = &score.maximum_statistics;
     let is_classic = is_classic(&score.mods);
 
-    let total_hits = score.total_hits();
+    let total_hits = stats.great + stats.ok + stats.meh;
     let ratio_300 = stats.great as f32 / total_hits as f32;
     let ratio_100 = stats.ok as f32 / total_hits as f32;
 
     let is_fail = !score.passed;
 
-    let misses = if is_fail { max_stats.great - total_hits } else { stats.miss };
-    let tail_hits = if is_fail { max_stats.slider_tail_hit } else { stats.slider_tail_hit };
+    let misses = is_fail
+        .then(|| max_stats.great - total_hits)
+        .unwrap_or(stats.miss);
+
+    let tail_hits = if is_fail {
+        match beatmap {
+            Some(map) => {
+                let tick_misses = slider_tail_tick_miss(score, map)
+                    .map(|r| r.tail_miss)
+                    .unwrap_or_default();
+                max_stats.slider_tail_hit - tick_misses
+            }
+            None => max_stats.slider_tail_hit,
+        }
+    } else {
+        stats.slider_tail_hit
+    };
 
     let miss_to_300 = (misses as f32 * ratio_300).round() as u32;
     let miss_to_100 = (misses as f32 * ratio_100).round() as u32;
@@ -309,16 +370,19 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
         stats.meh + miss_to_50,
     );
 
-    let state = OsuScoreState {
+    let mut state = OsuScoreState {
         n300: nc_300,
         n100: nc_100,
         n50: nc_50,
         misses: 0,
-        slider_end_hits: tail_hits,
-        large_tick_hits: max_stats.large_tick_hit,
-        small_tick_hits: max_stats.small_tick_hit,
         ..OsuScoreState::new()
     };
+
+    if is_classic.not() {
+        state.slider_end_hits = stats.slider_tail_hit;
+        state.small_tick_hits = stats.small_tick_hit;
+        state.large_tick_hits = stats.large_tick_hit;
+    }
 
     let nc_acc = if is_classic {
         state.accuracy(OsuScoreOrigin::Stable) * 100.0
@@ -335,18 +399,16 @@ pub fn calculate_nc_stats(perf_attrs: PerformanceAttributes, score: &Score) -> N
         .n300(nc_300)
         .n100(nc_100)
         .n50(nc_50)
-        .slider_end_hits(tail_hits
-        )
+        .slider_end_hits(tail_hits)
         .lazer(!is_classic)
         .calculate();
 
     let nc_pp = nc_attrs.pp();
 
-    let slider_tail_miss = if is_classic.not() && is_fail.not() {
-        max_stats.slider_tail_hit - stats.slider_tail_hit
-    } else {
-        0
-    };
+    let slider_tail_miss = is_classic
+        .not()
+        .then(|| max_stats.slider_tail_hit - tail_hits)
+        .unwrap_or_default();
 
     NoChokeStats {
         n300: nc_300,

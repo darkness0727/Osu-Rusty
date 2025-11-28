@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::{
     Error, OSU_CLIENT,
     resource_handler::{ResourceCategory, get_resource_path, save_resource},
-    utils::osu_pp::is_classic,
+    utils::osu_pp::slider_tail_tick_miss,
 };
 use num_traits::clamp_min;
 use rosu_pp::Beatmap;
@@ -90,14 +90,12 @@ pub fn format_hits(n300: u32, n100: u32, n50: u32, miss: u32) -> String {
     format!("{{{}/{}/{}/{}}}", n300, n100, n50, miss)
 }
 
-pub fn format_slider_misses(score: &Score) -> Option<String> {
-    if is_classic(&score.mods) {
-        return None;
-    };
+pub fn format_slider_misses(score: &Score, map: Beatmap) -> Option<String> {
 
-    let stats = &score.statistics;
-    let tick_miss = stats.small_tick_miss + stats.large_tick_miss;
-    let tail_miss = score.maximum_statistics.slider_tail_hit - stats.slider_tail_hit;
+    let stats = slider_tail_tick_miss(score, &map)?; 
+
+    let tick_miss  = stats.tick_miss;
+    let tail_miss = stats.tail_miss;
 
     let has_tick_miss = tick_miss > 0;
     let has_tail_miss = tail_miss > 0;
@@ -110,13 +108,9 @@ pub fn format_slider_misses(score: &Score) -> Option<String> {
         .then(|| format!("{tick_miss}{TICK_MISS_EMOJI}"))
         .unwrap_or_default();
 
-    let tail_miss_text = if score.passed {
-        has_tail_miss
-            .then(|| format!("{tail_miss}{TAIL_MISS_EMOJI}"))
-            .unwrap_or_default()
-    } else {
-        format!("?{TAIL_MISS_EMOJI}")
-    };
+    let tail_miss_text = has_tail_miss
+        .then(|| format!("{tail_miss}{TAIL_MISS_EMOJI}"))
+        .unwrap_or_default();
 
     Some(format!("{tick_miss_text}{tail_miss_text}"))
 }
