@@ -19,7 +19,12 @@ use crate::{
     },
 };
 
-pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEmbed {
+pub fn create(
+    player: UserExtended,
+    score: &Score,
+    beatmap: Beatmap,
+    best_index: Option<usize>,
+) -> CreateEmbed {
     let player_name = player.username.to_string();
 
     let (Some(player_stats), Some(map), Some(mapset)) =
@@ -150,10 +155,15 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
         ))
         .icon_url("https://files.catbox.moe/7kcm1a");
 
+    let description = best_index
+        .map(|i| format!("**__Personal Best #{i}__**"))
+        .unwrap_or_default();
+
     CreateEmbed::new()
         .author(embed_author)
         .thumbnail(&mapset.covers.list)
         .title(embed_title)
+        .description(description)
         .field(embed_field_name, embed_field_value, false)
         .url(&map.url)
         .footer(embed_footer)
@@ -163,7 +173,7 @@ pub fn create(player: UserExtended, score: &Score, beatmap: Beatmap) -> CreateEm
 static PP_GAINED_TEXT: &str = "**[(?)](https://discord.com/channels/1297750821219467264/1297838959854096454/# \"the amount of raw profile PP gained from this play accounting for previous scores on the map, this does not include bonus PP and the value is only accurate if this is the most recent top play\")**";
 static MISSING_TEXT: &str = "**[(?)](https://discord.com/channels/1297750821219467264/1297838959854096454/# \"the top200 did not include this score likely because the api wasn't done processing but presumably the score is in there\")**";
 
-pub fn edit_pb(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
+pub fn edit_pb_recent(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
     let description = format!(
         "**__Personal Best #{pb_index}__**  • Gained: **{}pp** {PP_GAINED_TEXT}",
         pp_gained.two_decimal()
@@ -172,7 +182,7 @@ pub fn edit_pb(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmb
     embed.description(description)
 }
 
-pub fn edit_missing_pb(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
+pub fn edit_missing_pb_recent(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
     let description = format!(
         "**__Personal Best #{pb_index}__** {MISSING_TEXT}  • Gained: **{}pp** {PP_GAINED_TEXT}",
         pp_gained.two_decimal()
