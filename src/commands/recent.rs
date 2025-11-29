@@ -2,14 +2,13 @@ use crate::{
     Error,
     embeds::{
         error::{failed_embed, not_enough_scores, player_not_found_embed},
-        recent::{create, edit_if_ranked_pb, edit_missing_pb, edit_pb},
+        single_score::{create, edit_if_ranked_pb, edit_missing_pb_recent, edit_pb_recent},
     },
     utils::{
         discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed},
         osu_pp::{IsPbResult, is_in_pb, pp_gained_from_play},
         osu_utils::{
-            download_map_file, fetch_all_personal_bests, fetch_player, fetch_recent_scores,
-            load_local_beatmap,
+            MAX_TOP_PLAY_COUNT, download_map_file, fetch_personal_bests, fetch_player, fetch_recent_scores, load_local_beatmap
         },
     },
 };
@@ -39,7 +38,7 @@ pub async fn recent(
         index,
         !only_passes,
     ));
-    let top_plays_handle = tokio::spawn(fetch_all_personal_bests(name.clone()));
+    let top_plays_handle = tokio::spawn(fetch_personal_bests(name.clone(), MAX_TOP_PLAY_COUNT, 0));
     let player = match player_handle.await {
         Ok(Ok(player)) => player,
         _ => {
@@ -77,7 +76,7 @@ pub async fn recent(
         return Ok(());
     };
 
-    let embed = create(player, &score, beatmap);
+    let embed = create(player, &score, beatmap, None);
 
     let msg_handle = reply_with_embed(&ctx, embed.clone()).await?;
 
@@ -94,14 +93,14 @@ pub async fn recent(
     };
 
     let updated_embed = match is_top_result {
-        IsPbResult::InPB(index) => edit_pb(
+        IsPbResult::InPB(index) => edit_pb_recent(
             embed,
             index,
             pp_gained_from_play(top_plays, &score, name)
                 .await
                 .unwrap_or_default(),
         ),
-        IsPbResult::MissingPB(index) => edit_missing_pb(
+        IsPbResult::MissingPB(index) => edit_missing_pb_recent(
             embed,
             index,
             pp_gained_from_play(top_plays, &score, name)

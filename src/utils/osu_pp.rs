@@ -96,6 +96,19 @@ pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult
     }
 }
 
+/// Checks if score id is in top plays
+pub async fn pb_index_id_match(top_plays: Vec<Score>, score: &Score) -> Option<usize> {
+    let mut score_id_to_index = HashMap::with_capacity(top_plays.len());
+    let mut map_id_to_pp = HashMap::with_capacity(top_plays.len());
+    for (index, score) in top_plays.iter().enumerate() {
+        score_id_to_index.insert(score.id, index);
+        map_id_to_pp.insert(score.map_id, score.pp.unwrap_or_default());
+    }
+
+    // check for score ID match
+    score_id_to_index.get(&score.id).map(|i| *i + 1)
+}
+
 pub enum IsPbResult {
     InPB(usize),
     MissingPB(usize),

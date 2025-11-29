@@ -52,38 +52,40 @@ pub async fn fetch_personal_bests(
     offset: usize,
 ) -> Result<Vec<Score>, OsuError> {
     let osu = OSU_CLIENT.get().unwrap();
+    let max_per_call = 100;
 
-    osu.user_scores(&name)
-        .best()
-        .limit(amount)
-        .offset(offset)
-        .await
-}
-
-pub async fn fetch_all_personal_bests(name: String) -> Result<Vec<Score>, Error> {
-    let osu = OSU_CLIENT.get().unwrap();
-
-    let top_plays_handle = tokio::spawn(
+    if amount <= max_per_call {
         osu.user_scores(&name)
             .best()
-            .limit(100)
-            .offset(0)
-            .into_future(),
-    );
-    let top_plays_handle2 = tokio::spawn(
-        osu.user_scores(&name)
-            .best()
-            .limit(100)
-            .offset(100)
-            .into_future(),
-    );
+            .limit(amount)
+            .offset(offset)
+            .await
+    } else {
+        let top_plays_handle = tokio::spawn(
+            osu.user_scores(&name)
+                .best()
+                .limit(max_per_call)
+                .offset(offset)
+                .into_future(),
+        );
 
-    let mut top_plays = top_plays_handle.await??;
-    let top_plays_second = top_plays_handle2.await??;
+        let second_limit = amount - max_per_call;
+        let second_offset = offset + max_per_call;
 
-    top_plays.extend(top_plays_second);
+        let top_plays_handle_2 = tokio::spawn(
+            osu.user_scores(&name)
+                .best()
+                .limit(second_limit)
+                .offset(second_offset)
+                .into_future(),
+        );
 
-    Ok(top_plays)
+        let mut top_plays = top_plays_handle.await.unwrap()?;
+        let top_plays_2 = top_plays_handle_2.await.unwrap()?;
+
+        top_plays.extend(top_plays_2);
+        Ok(top_plays)
+    }
 }
 
 pub async fn download_map_file(map_id: u32) -> Result<String, Error> {
