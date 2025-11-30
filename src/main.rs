@@ -5,7 +5,7 @@ use rosu_v2::Osu;
 use serenity::prelude::*;
 
 use crate::{
-    commands::{profile::profile, recent::recent, top::top}, resource_handler::create_all_dir, utils::osu_utils::login
+    commands::{background::background, profile::profile, recent::recent, top::top}, resource_handler::create_all_dir, utils::osu_utils::login
 };
 
 mod commands;
@@ -52,7 +52,7 @@ async fn start_discord_bot() {
         | GatewayIntents::MESSAGE_CONTENT;
 
     let options = poise::FrameworkOptions {
-        commands: vec![profile(), recent(), top()],
+        commands: vec![profile(), recent(), top(), background()],
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("?".into()),
             ..Default::default()

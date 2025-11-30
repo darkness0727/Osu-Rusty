@@ -6,11 +6,13 @@ use crate::{
     utils::osu_pp::slider_tail_tick_miss,
 };
 use num_traits::clamp_min;
+use regex::Regex;
+use reqwest::Url;
 use rosu_pp::Beatmap;
 use rosu_v2::{
     error::OsuError,
     model::Grade,
-    prelude::{Score, UserExtended},
+    prelude::{BeatmapExtended, BeatmapsetExtended, Score, UserExtended},
 };
 use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
@@ -44,6 +46,18 @@ pub async fn fetch_map_scores(name: String, map_id: u32) -> Result<Vec<Score>, O
     let osu = OSU_CLIENT.get().unwrap();
 
     osu.beatmap_user_scores(map_id, name).await
+}
+
+pub async fn fetch_map(map_id: u32) -> Result<BeatmapExtended, OsuError> {
+    let osu = OSU_CLIENT.get().unwrap();
+
+    osu.beatmap().map_id(map_id).await
+}
+
+pub async fn fetch_mapset(map_id: u32) -> Result<BeatmapsetExtended, OsuError> {
+    let osu = OSU_CLIENT.get().unwrap();
+
+    osu.beatmapset(map_id).await
 }
 
 pub async fn fetch_personal_bests(
@@ -116,6 +130,105 @@ pub fn load_local_beatmap(map_id: u32) -> Result<Beatmap, Error> {
 
 pub fn format_hits(n300: u32, n100: u32, n50: u32, miss: u32) -> String {
     format!("{{{}/{}/{}/{}}}", n300, n100, n50, miss)
+}
+
+/// ChatGPT wrote this not me
+pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
+    let trimmed = s.trim();
+
+    // 0) If the entire input is a number -> treat as map_id
+    if let Ok(n) = trimmed.parse::<u32>() {
+        return ParsedUrlResult { mapset_id: None, map_id: Some(n) };
+    }
+
+    // Make it a valid URL if it isn't one already (adds https://)
+    let candidate = if Url::parse(trimmed).is_ok() {
+        trimmed.to_string()
+    } else {
+        format!("https://{}", trimmed)
+    };
+
+    // If still cannot parse, return empty result (per your note).
+    let url = match Url::parse(&candidate) {
+        Ok(u) => u,
+        Err(_) => return ParsedUrlResult { mapset_id: None, map_id: None },
+    };
+
+    let digit_re = Regex::new(r"\d+").unwrap();
+
+    let mut mapset_id: Option<u32> = None;
+    let mut map_id: Option<u32> = None;
+
+    // 1) Fragment (prefer this for map_id), e.g. "#osu/4924798" -> 4924798
+    if let Some(fragment) = url.fragment() {
+        if let Some(mat) = digit_re.find_iter(fragment).last() {
+            map_id = mat.as_str().parse().ok();
+        }
+    }
+
+    // 2) Path segments — explicit patterns first
+    if let Some(segments) = url.path_segments() {
+        let segs: Vec<&str> = segments.filter(|seg| !seg.is_empty()).collect();
+
+        for i in 0..segs.len() {
+            match segs[i] {
+                "beatmapsets" if i + 1 < segs.len() => {
+                    if mapset_id.is_none() {
+                        mapset_id = segs[i + 1].parse::<u32>().ok();
+                    }
+                }
+                "beatmaps" | "beatmap" | "b" if i + 1 < segs.len() => {
+                    if map_id.is_none() {
+                        map_id = segs[i + 1].parse::<u32>().ok();
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // 2b) Path fallback: consider last numeric token in the path only in safe cases
+        if map_id.is_none() {
+            // collect all numeric tokens in the path
+            let path_digits: Vec<u32> = digit_re
+                .find_iter(url.path())
+                .filter_map(|m| m.as_str().parse::<u32>().ok())
+                .collect();
+
+            if !path_digits.is_empty() {
+                if path_digits.len() > 1 {
+                    // multiple numbers in path -> last one is likely the map_id
+                    map_id = path_digits.last().cloned();
+                } else {
+                    // exactly one numeric token in path:
+                    // only treat it as map_id if we didn't already identify it as mapset_id
+                    let only = path_digits[0];
+                    if mapset_id.is_none() {
+                        // no mapset found -> this single number is probably a map_id (e.g. /beatmap/4924798)
+                        map_id = Some(only);
+                    } else {
+                        // mapset_id exists and it's the only number in path -> do NOT set map_id
+                        // (this prevents treating /beatmapsets/2285243 as map_id)
+                    }
+                }
+            }
+        }
+    }
+
+    // 3) Query fallback (e.g. ?id=4924798), only if map_id still missing
+    if map_id.is_none() {
+        if let Some(q) = url.query() {
+            if let Some(mat) = digit_re.find_iter(q).last() {
+                map_id = mat.as_str().parse().ok();
+            }
+        }
+    }
+
+    ParsedUrlResult { mapset_id, map_id }
+}
+
+pub struct ParsedUrlResult {
+    pub mapset_id: Option<u32>,
+    pub map_id: Option<u32>
 }
 
 pub fn format_slider_misses(score: &Score, map: Beatmap) -> Option<String> {
