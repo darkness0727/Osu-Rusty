@@ -1,6 +1,6 @@
 use serenity::all::CreateEmbed;
 
-use crate::embeds::FAIL_EMBED_COLOR;
+use crate::embeds::{DEFAULT_EMBED_COLOR, FAIL_EMBED_COLOR};
 
 pub fn player_not_found_embed(name: String) -> CreateEmbed {
     CreateEmbed::new()
@@ -33,15 +33,23 @@ pub fn failed_map(fail_type: FailedMapErr) -> CreateEmbed {
         FailedMapErr::FailedUrlParse => "Invalid beatmap URL",
         FailedMapErr::MapNotFound => "Map not found",
         FailedMapErr::SetNotFound => "Mapset not found",
+        FailedMapErr::ExpectedDifficulty => "Expected a map difficulty, found mapset"
     }.to_string();
     
     failed_embed_custom(err)
+}
+
+pub fn no_scores_found() -> CreateEmbed {
+    CreateEmbed::new()
+        .color(DEFAULT_EMBED_COLOR)
+        .description("No scores found on map".to_string())
 }
 
 pub enum FailedMapErr {
     FailedUrlParse,
     MapNotFound,
     SetNotFound,
+    ExpectedDifficulty,
 }
 
 pub fn failed_embed() -> CreateEmbed {

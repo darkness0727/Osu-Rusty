@@ -5,20 +5,21 @@ use rosu_v2::Osu;
 use serenity::prelude::*;
 
 use crate::{
-    commands::{background::background, profile::profile, recent::recent, top::top}, resource_handler::create_all_dir, utils::osu_utils::login
+    commands::{background::background, profile::profile, recent::recent, score::score, top::top},
+    resource_handler::create_all_dir,
+    utils::osu_utils::login,
 };
 
 mod commands;
 mod embeds;
-pub mod utils;
 pub mod resource_handler;
+pub mod utils;
 
 // Types used by all command functions
 type Error = Box<dyn std::error::Error + Send + Sync>;
 //type Context<'a> = poise::Context<'a, Data, Error>;
 
 pub static OSU_CLIENT: OnceCell<Osu> = OnceCell::new();
-
 
 #[tokio::main]
 async fn main() {
@@ -52,7 +53,7 @@ async fn start_discord_bot() {
         | GatewayIntents::MESSAGE_CONTENT;
 
     let options = poise::FrameworkOptions {
-        commands: vec![profile(), recent(), top(), background()],
+        commands: vec![profile(), recent(), top(), background(), score()],
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("?".into()),
             ..Default::default()

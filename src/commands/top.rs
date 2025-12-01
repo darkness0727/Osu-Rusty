@@ -2,7 +2,7 @@ use crate::{
     Error,
     embeds::{
         error::{failed_embed, player_not_found_embed},
-        single_score::create,
+        recent::create,
     },
     utils::{
         discord_utils::{check_reply_with_embed, reply_with_embed},

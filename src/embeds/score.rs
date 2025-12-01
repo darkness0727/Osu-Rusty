@@ -3,12 +3,12 @@ use std::ops::Not;
 use rosu_pp::Beatmap;
 use rosu_v2::{
     model::Grade,
-    prelude::{Score, UserExtended},
+    prelude::{BeatmapExtended, BeatmapsetExtended, Score, UserExtended},
 };
 use serenity::all::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter};
 
 use crate::{
-    embeds::FAIL_EMBED_COLOR,
+    embeds::{FAIL_EMBED_COLOR, MISSING_TEXT},
     utils::{
         CommaFormat, CommaFormatFloat,
         osu_pp::{cal_failed_pp, cal_score_pp_perf, calculate_nc_stats, is_fc, map_stats},
@@ -23,17 +23,17 @@ pub fn create(
     player: UserExtended,
     score: &Score,
     beatmap: Beatmap,
+    map_extended: BeatmapExtended,
+    mapset_extended: BeatmapsetExtended,
     best_index: Option<usize>,
 ) -> CreateEmbed {
     let player_name = player.username.to_string();
 
-    let (Some(player_stats), Some(map), Some(mapset)) =
-        (player.statistics, &score.map, &score.mapset)
-    else {
+    let Some(player_stats) = player.statistics else {
         return CreateEmbed::new()
             .color(FAIL_EMBED_COLOR)
             .description("failed to fetch info");
-    };
+};
 
     let player_pp = player_stats.pp.format();
     let country_code = player.country_code;
@@ -50,7 +50,7 @@ pub fn create(
     let formatted_mods = format!("+{}", mods_owned);
     let time_ago = relative_timestamp(score.ended_at);
 
-    let (perf_attrs, map_stats) = map_stats(&beatmap, mods_owned, map.seconds_drain);
+    let (perf_attrs, map_stats) = map_stats(&beatmap, mods_owned, map_extended.seconds_drain);
 
     let (ar, od, cs, hp, bpm, seconds_drain) = (
         map_stats.ar,
@@ -79,7 +79,7 @@ pub fn create(
 
     let stats = &score.statistics;
 
-    let nc_stats = if is_fc(score, map_combo, map.count_sliders).not() {
+    let nc_stats = if is_fc(score, map_combo, map_extended.count_sliders).not() {
         let nc_stats = calculate_nc_stats(perf_attrs, score, Some(&beatmap));
 
         let nc_pp = nc_stats.pp.format();
@@ -122,9 +122,9 @@ pub fn create(
 
     let embed_title = format!(
         "{} - {} [{}] [{}★]",
-        mapset.artist,
-        mapset.title,
-        map.version,
+        mapset_extended.artist,
+        mapset_extended.title,
+        map_extended.version,
         stars.format()
     );
 
@@ -151,7 +151,7 @@ pub fn create(
     let embed_footer = CreateEmbedFooter::new("")
         .text(format!(
             "Mapset by {} | {:?}",
-            mapset.creator_name, mapset.status
+            mapset_extended.creator_name, mapset_extended.status
         ))
         .icon_url("https://files.catbox.moe/7kcm1a");
 
@@ -161,31 +161,26 @@ pub fn create(
 
     CreateEmbed::new()
         .author(embed_author)
-        .thumbnail(&mapset.covers.list)
+        .thumbnail(&mapset_extended.covers.list)
         .title(embed_title)
         .description(description)
         .field(embed_field_name, embed_field_value, false)
-        .url(&map.url)
+        .url(&map_extended.url)
         .footer(embed_footer)
         .color(star_color_spectrum(stars))
 }
 
-static PP_GAINED_TEXT: &str = "**[(?)](https://discord.com/channels/1297750821219467264/1297838959854096454/# \"the amount of raw profile PP gained from this play accounting for previous scores on the map, this does not include bonus PP and the value is only accurate if this is the most recent top play\")**";
-static MISSING_TEXT: &str = "**[(?)](https://discord.com/channels/1297750821219467264/1297838959854096454/# \"the top200 did not include this score likely because the api wasn't done processing but presumably the score is in there\")**";
-
-pub fn edit_pb_recent(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
+pub fn edit_pb_score(embed: CreateEmbed, pb_index: usize) -> CreateEmbed {
     let description = format!(
-        "**__Personal Best #{pb_index}__**  • Gained: **{}pp** {PP_GAINED_TEXT}",
-        pp_gained.two_decimal()
+        "**__Personal Best #{pb_index}__**"
     );
 
     embed.description(description)
 }
 
-pub fn edit_missing_pb_recent(embed: CreateEmbed, pb_index: usize, pp_gained: f32) -> CreateEmbed {
+pub fn edit_missing_pb_score(embed: CreateEmbed, pb_index: usize) -> CreateEmbed {
     let description = format!(
-        "**__Personal Best #{pb_index}__** {MISSING_TEXT}  • Gained: **{}pp** {PP_GAINED_TEXT}",
-        pp_gained.two_decimal()
+        "**__Personal Best #{pb_index}__** {MISSING_TEXT}"
     );
 
     embed.description(description)

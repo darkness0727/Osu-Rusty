@@ -54,10 +54,16 @@ pub async fn fetch_map(map_id: u32) -> Result<BeatmapExtended, OsuError> {
     osu.beatmap().map_id(map_id).await
 }
 
-pub async fn fetch_mapset(map_id: u32) -> Result<BeatmapsetExtended, OsuError> {
+pub async fn fetch_mapset(mapset_id: u32) -> Result<BeatmapsetExtended, OsuError> {
     let osu = OSU_CLIENT.get().unwrap();
 
-    osu.beatmapset(map_id).await
+    osu.beatmapset(mapset_id).await
+}
+
+pub async fn fetch_mapset_from_diff(map_id: u32) -> Result<BeatmapsetExtended, OsuError> {
+    let osu = OSU_CLIENT.get().unwrap();
+
+    osu.beatmapset_from_map_id(map_id).await
 }
 
 pub async fn fetch_personal_bests(

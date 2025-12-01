@@ -1,15 +1,13 @@
 use crate::{
     Error,
     embeds::{
-        error::{failed_embed, not_enough_scores, player_not_found_embed},
-        recent::{create, edit_if_ranked_pb, edit_missing_pb_recent, edit_pb_recent},
+        error::{FailedMapErr, failed_embed, failed_embed_custom, failed_map, no_scores_found, player_not_found_embed},
+        score::{create, edit_if_ranked_pb, edit_missing_pb_score, edit_pb_score},
     },
     utils::{
-        discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed},
-        osu_pp::{IsPbResult, is_in_pb, pp_gained_from_play},
-        osu_utils::{
-            MAX_TOP_PLAY_COUNT, download_map_file, fetch_personal_bests, fetch_player, fetch_recent_scores, load_local_beatmap
-        },
+        discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed}, osu_pp::{IsPbResult, is_in_pb}, osu_utils::{
+            MAX_TOP_PLAY_COUNT, download_map_file, fetch_map, fetch_map_scores, fetch_mapset_from_diff, fetch_personal_bests, fetch_player, load_local_beatmap, parse_beatmap_url
+        }
     },
 };
 use poise::Context as PoiseContext;
@@ -21,24 +19,33 @@ use poise::Context as PoiseContext;
     guild_only = false,
     install_context = "Guild|User",
     interaction_context = "Guild|BotDm|PrivateChannel",
-    aliases("rs", "r")
+    aliases("compare", "c")
 )]
-pub async fn recent(
+pub async fn score(
     ctx: PoiseContext<'_, (), Error>,
     #[description = "Specify a user"] name: String,
-    #[description = "Specify which score"] index: Option<usize>,
-    #[description = "Should only contain passes"] pass: Option<bool>,
+    #[description = "Specify a map difficulty"] map: String,
 ) -> Result<(), Error> {
-    let index = index.unwrap_or(1);
-    let only_passes = pass.unwrap_or_default();
+    let parse_result = parse_beatmap_url(&map);
+
+    let Some(map_id) = parse_result.map_id else {
+        let embed = parse_result
+            .mapset_id
+            .is_some()
+            .then(|| failed_map(FailedMapErr::ExpectedDifficulty))
+            .unwrap_or_else(|| failed_map(FailedMapErr::FailedUrlParse));
+
+        check_reply_with_embed(&ctx, embed).await;
+
+        return Ok(());
+    };
 
     let player_handle = tokio::spawn(fetch_player(name.clone()));
-    let scores_handle = tokio::spawn(fetch_recent_scores(
-        name.clone(),
-        index,
-        !only_passes,
-    ));
+    let scores_handle = tokio::spawn(fetch_map_scores(name.clone(), map_id));
+    let map_handle = tokio::spawn(fetch_map(map_id));
+    let mapset_handle = tokio::spawn(fetch_mapset_from_diff(map_id));
     let top_plays_handle = tokio::spawn(fetch_personal_bests(name.clone(), MAX_TOP_PLAY_COUNT, 0));
+
     let player = match player_handle.await {
         Ok(Ok(player)) => player,
         _ => {
@@ -47,22 +54,26 @@ pub async fn recent(
             return Ok(());
         }
     };
-    let name = player.username.to_string();
 
-    let recent_scores = match scores_handle.await {
+    let (Ok(Ok(map)), Ok(Ok(mapset))) = (map_handle.await, mapset_handle.await) else {
+        let err = String::from("Failed to fetch beatmap");
+        check_reply_with_embed(&ctx, failed_embed_custom(err)).await;
+        return Ok(());
+    };
+
+    let scores = match scores_handle.await {
         Ok(Ok(scores)) => scores,
         _ => vec![],
     };
 
-    let length = recent_scores.len();
-    if length < index {
-        let embed = not_enough_scores(name, length, only_passes);
+    if scores.len() <= 0 {
+        let embed = no_scores_found();
         check_reply_with_embed(&ctx, embed).await;
         return Ok(());
     }
 
-    let score = recent_scores[index - 1].clone();
-    let map_id = score.map_id;
+
+    let score = scores[0].clone();
 
     if let Err(err) = download_map_file(map_id).await {
         println!("{err}");
@@ -76,9 +87,10 @@ pub async fn recent(
         return Ok(());
     };
 
-    let embed = create(player, &score, beatmap, None);
+    let embed = create(player, &score, beatmap, map, mapset, None);
 
     let msg_handle = reply_with_embed(&ctx, embed.clone()).await?;
+
 
     let Ok(Ok(top_plays)) = top_plays_handle.await else {
         return Ok(());
@@ -89,19 +101,13 @@ pub async fn recent(
     };
 
     let updated_embed = match is_top_result {
-        IsPbResult::InPB(index) => edit_pb_recent(
+        IsPbResult::InPB(index) => edit_pb_score(
             embed,
             index,
-            pp_gained_from_play(top_plays, &score, name)
-                .await
-                .unwrap_or_default(),
         ),
-        IsPbResult::MissingPB(index) => edit_missing_pb_recent(
+        IsPbResult::MissingPB(index) => edit_missing_pb_score(
             embed,
             index,
-            pp_gained_from_play(top_plays, &score, name)
-                .await
-                .unwrap_or_default(),
         ),
         IsPbResult::IfRanked(index) => edit_if_ranked_pb(embed, index),
         IsPbResult::NotPB => return Ok(()),
