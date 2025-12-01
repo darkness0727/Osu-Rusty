@@ -28,6 +28,22 @@ pub fn not_enough_scores(name: String, length: usize, only_passes: bool) -> Crea
         .description(description)
 }
 
+pub fn failed_map(fail_type: FailedMapErr) -> CreateEmbed {
+    let err = match fail_type {
+        FailedMapErr::FailedUrlParse => "Invalid beatmap URL",
+        FailedMapErr::MapNotFound => "Map not found",
+        FailedMapErr::SetNotFound => "Mapset not found",
+    }.to_string();
+    
+    failed_embed_custom(err)
+}
+
+pub enum FailedMapErr {
+    FailedUrlParse,
+    MapNotFound,
+    SetNotFound,
+}
+
 pub fn failed_embed() -> CreateEmbed {
     CreateEmbed::new()
         .color(FAIL_EMBED_COLOR)

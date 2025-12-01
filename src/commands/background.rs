@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    embeds::error::failed_embed_custom,
+    embeds::error::{FailedMapErr, failed_embed_custom, failed_map},
     utils::{
         discord_utils::{check_reply, check_reply_with_embed},
         osu_utils::{fetch_map, fetch_mapset, parse_beatmap_url},
@@ -32,7 +32,7 @@ pub async fn background(
         let map_id = ids.map_id.unwrap();
         println!("{map_id}");
         let Ok(Some(mapset)) = fetch_map(map_id).await.map(|m| m.mapset) else {
-            let embed = failed_embed_custom(String::from("Map not found"));
+            let embed = failed_map(FailedMapErr::MapNotFound);
             check_reply_with_embed(&ctx, embed).await;
             return Ok(());
         };
@@ -40,13 +40,13 @@ pub async fn background(
     } else if ids.mapset_id.is_some() {
         let mapset_id = ids.mapset_id.unwrap();
         let Ok(mapset) = fetch_mapset(mapset_id).await else {
-            let embed = failed_embed_custom(String::from("Map not found"));
+            let embed = failed_map(FailedMapErr::MapNotFound);
             check_reply_with_embed(&ctx, embed).await;
             return Ok(());
         };
         mapset.covers.card_2x
     } else {
-        let embed = failed_embed_custom(String::from("Failed to parse beatmap url"));
+            let embed = failed_map(FailedMapErr::FailedUrlParse);
         check_reply_with_embed(&ctx, embed).await;
         return Ok(());
     };
