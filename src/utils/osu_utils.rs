@@ -138,7 +138,10 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
 
     // 0) If the entire input is a number -> treat as map_id
     if let Ok(n) = trimmed.parse::<u32>() {
-        return ParsedUrlResult { mapset_id: None, map_id: Some(n) };
+        return ParsedUrlResult {
+            mapset_id: None,
+            map_id: Some(n),
+        };
     }
 
     // Make it a valid URL if it isn't one already (adds https://)
@@ -151,7 +154,12 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
     // If still cannot parse, return empty result (per your note).
     let url = match Url::parse(&candidate) {
         Ok(u) => u,
-        Err(_) => return ParsedUrlResult { mapset_id: None, map_id: None },
+        Err(_) => {
+            return ParsedUrlResult {
+                mapset_id: None,
+                map_id: None,
+            };
+        }
     };
 
     let digit_re = Regex::new(r"\d+").unwrap();
@@ -228,7 +236,7 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
 
 pub struct ParsedUrlResult {
     pub mapset_id: Option<u32>,
-    pub map_id: Option<u32>
+    pub map_id: Option<u32>,
 }
 
 pub fn format_slider_misses(score: &Score, map: Beatmap) -> Option<String> {
@@ -320,16 +328,17 @@ pub static TAIL_MISS_EMOJI: &str = "<:slider_tail_miss:1441692017775083642>";
 
 pub fn grade_emoji(grade: Grade) -> String {
     match grade {
-        Grade::X => String::from("<:SS:1346458936596889640>"),
-        Grade::S => String::from("<:S_:1346458998425128990>"),
-        Grade::XH => String::from("<:SSH:1346459029656047646>"),
-        Grade::SH => String::from("<:SH:1346459119741046794>"),
-        Grade::A => String::from("<:A_:1346459159935193139>"),
-        Grade::B => String::from("<:B_:1346459185512054814>"),
-        Grade::C => String::from("<:C_:1346459204847796264>"),
-        Grade::D => String::from("<:D_:1347295031756587039>"),
-        Grade::F => String::from("<:F_:1346460123173879859>"),
+        Grade::X => "<:SS:1346458936596889640>",
+        Grade::S => "<:S_:1346458998425128990>",
+        Grade::XH => "<:SSH:1346459029656047646>",
+        Grade::SH => "<:SH:1346459119741046794>",
+        Grade::A => "<:A_:1346459159935193139>",
+        Grade::B => "<:B_:1346459185512054814>",
+        Grade::C => "<:C_:1346459204847796264>",
+        Grade::D => "<:D_:1347295031756587039>",
+        Grade::F => "<:F_:1346460123173879859>",
     }
+    .to_string()
 }
 
 pub fn format_join_date(date: OffsetDateTime) -> String {
