@@ -64,7 +64,7 @@ pub async fn fetch_personal_bests(
     name: String,
     amount: usize,
     offset: usize,
-) -> Result<Vec<Score>, OsuError> {
+) -> Result<Vec<Score>, Error> {
     let osu = OSU_CLIENT.get().unwrap();
     let max_per_call = 100;
 
@@ -74,6 +74,7 @@ pub async fn fetch_personal_bests(
             .limit(amount)
             .offset(offset)
             .await
+            .map_err(Into::into)
     } else {
         let top_plays_handle = tokio::spawn(
             osu.user_scores(&name)
@@ -94,8 +95,12 @@ pub async fn fetch_personal_bests(
                 .into_future(),
         );
 
-        let mut top_plays = top_plays_handle.await.unwrap()?;
-        let top_plays_2 = top_plays_handle_2.await.unwrap()?;
+        let mut top_plays = top_plays_handle
+            .await
+            .map_err(|e| -> Error { e.into() })??;
+        let top_plays_2 = top_plays_handle_2
+            .await
+            .map_err(|e| -> Error { e.into() })??;
 
         top_plays.extend(top_plays_2);
         Ok(top_plays)
