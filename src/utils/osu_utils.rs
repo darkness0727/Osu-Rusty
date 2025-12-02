@@ -245,6 +245,27 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
     ParsedUrlResult { mapset_id, map_id }
 }
 
+/// ALSO written by ChatGPT rest in peace
+pub fn highest_pp_score(mut scores: Vec<Score>) -> Option<(Score, Vec<Score>)> {
+    if scores.is_empty() {
+        return None;
+    }
+
+    // Find index of highest-pp score
+    let best_idx = scores
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| s.pp.map(|pp| (pp, i)))
+        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+        .map(|(_, idx)| idx)
+        .unwrap_or(0);
+
+    // Remove it from the vec
+    let picked = scores.remove(best_idx);
+
+    Some((picked, scores))
+}
+
 pub struct ParsedUrlResult {
     pub mapset_id: Option<u32>,
     pub map_id: Option<u32>,

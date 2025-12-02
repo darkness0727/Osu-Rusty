@@ -1,4 +1,4 @@
-use std::ops::Not;
+use std::{fmt::format, ops::Not};
 
 use rosu_pp::Beatmap;
 use rosu_v2::{
@@ -8,32 +8,38 @@ use rosu_v2::{
 use serenity::all::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter};
 
 use crate::{
-    embeds::{FAIL_EMBED_COLOR, MISSING_TEXT},
+    embeds::{MISSING_TEXT, error::failed_embed_custom},
     utils::{
         CommaFormat, CommaFormatFloat,
-        osu_pp::{cal_failed_pp, cal_score_pp_perf, calculate_nc_stats, is_fc, map_stats},
+        osu_pp::{
+            cal_failed_pp, cal_score_pp_perf, calculate_nc_stats, is_fc, map_stats,
+            pb_index_id_match,
+        },
         osu_utils::{
             BPM_EMOJI, TAIL_MISS_EMOJI, format_hits, format_slider_misses, formated_song_length,
-            get_flag_url, grade_emoji, relative_timestamp, star_color_spectrum,
+            get_flag_url, grade_emoji, highest_pp_score, relative_timestamp, star_color_spectrum,
         },
     },
 };
 
 pub fn create(
     player: UserExtended,
-    score: &Score,
+    scores: Vec<Score>,
     beatmap: Beatmap,
     map_extended: BeatmapExtended,
     mapset_extended: BeatmapsetExtended,
-    best_index: Option<usize>,
+    top_plays: Option<Vec<Score>>,
 ) -> CreateEmbed {
     let player_name = player.username.to_string();
 
     let Some(player_stats) = player.statistics else {
-        return CreateEmbed::new()
-            .color(FAIL_EMBED_COLOR)
-            .description("failed to fetch info");
-};
+        return failed_embed_custom(String::from("Failed to fetch player info"));
+    };
+
+    let Some((score, other_scores)) = highest_pp_score(scores) else {
+        return failed_embed_custom(String::from("No were scores found"));
+    };
+    let score = &score;
 
     let player_pp = player_stats.pp.format();
     let country_code = player.country_code;
@@ -113,6 +119,13 @@ pub fn create(
         String::from("")
     };
 
+    let other_scores_text = other_scores_text(other_scores);
+
+    let description = top_plays
+        .and_then(|t| pb_index_id_match(t, score))
+        .map(|i| format!("__**Personal Best #{i}**__"))
+        .unwrap_or_default();
+
     let embed_author = CreateEmbedAuthor::new("")
         .name(format!(
             "{player_name}: {player_pp}pp (#{global_rank} {country_code}{country_rank})"
@@ -144,7 +157,7 @@ pub fn create(
             "**{pp}**/{max_pp} PP • {formatted_hits} • **{score_combo}**/{map_combo}x {formatted_slider_stats}"
         ),
         format!(
-            "{nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` • {BPM_EMOJI} **{bpm}**"
+            "{nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` • {BPM_EMOJI} **{bpm}**\n\n{other_scores_text}"
         )
     );
 
@@ -154,10 +167,6 @@ pub fn create(
             mapset_extended.creator_name, mapset_extended.status
         ))
         .icon_url("https://files.catbox.moe/7kcm1a");
-
-    let description = best_index
-        .map(|i| format!("**__Personal Best #{i}__**"))
-        .unwrap_or_default();
 
     CreateEmbed::new()
         .author(embed_author)
@@ -170,24 +179,27 @@ pub fn create(
         .color(star_color_spectrum(stars))
 }
 
-pub fn edit_pb_score(embed: CreateEmbed, pb_index: usize) -> CreateEmbed {
-    let description = format!(
-        "**__Personal Best #{pb_index}__**"
-    );
+fn other_scores_text(scores: Vec<Score>) -> String {
+    if scores.len() == 0 {
+        return String::from("");
+    }
+    let mut text = String::from("__Other scores on the beatmap:__");
 
-    embed.description(description)
-}
+    for (index, score) in scores.iter().enumerate() {
+        if index > 5 {
+            break;
+        };
+        let grade = grade_emoji(score.grade);
+        let mods = score.mods.clone();
+        let stars = "0";
+        let acc = score.accuracy.two_decimal();
+        let combo = score.max_combo;
+        let misses = "miss";
+        let timestamp = relative_timestamp(score.ended_at);
 
-pub fn edit_missing_pb_score(embed: CreateEmbed, pb_index: usize) -> CreateEmbed {
-    let description = format!(
-        "**__Personal Best #{pb_index}__** {MISSING_TEXT}"
-    );
+        text +=
+            &format!("\n{grade} **+{mods}** [{stars}] ({acc}%) {combo}x • {misses} {timestamp}");
+    }
 
-    embed.description(description)
-}
-
-pub fn edit_if_ranked_pb(embed: CreateEmbed, pb_index: usize) -> CreateEmbed {
-    let description = format!("__Personal Best #{pb_index}__ • **If Ranked**");
-
-    embed.description(description)
+    text
 }
