@@ -271,7 +271,7 @@ pub struct ParsedUrlResult {
     pub map_id: Option<u32>,
 }
 
-pub fn format_slider_misses(score: &Score, map: Beatmap) -> Option<String> {
+pub fn format_slider_misses(score: &Score, map: &Beatmap) -> Option<String> {
     let stats = slider_tail_tick_miss(score, &map)?;
 
     let tick_miss = stats.tick_miss;
@@ -293,6 +293,16 @@ pub fn format_slider_misses(score: &Score, map: Beatmap) -> Option<String> {
         .unwrap_or_default();
 
     Some(format!("{tick_miss_text}{tail_miss_text}"))
+}
+
+pub fn format_slider_tick_misses(score: &Score, map: Beatmap) -> Option<String> {
+    let stats = slider_tail_tick_miss(score, &map)?;
+
+    let tick_miss = stats.tick_miss;
+
+    let has_tick_miss = tick_miss > 0;
+
+    has_tick_miss.then(|| format!("{tick_miss}{TICK_MISS_EMOJI}"))
 }
 
 /// Color spectrum interpolation for star rating.
@@ -354,6 +364,7 @@ pub fn relative_timestamp(time: OffsetDateTime) -> String {
     format!("<t:{}:R>", time.unix_timestamp())
 }
 
+pub static MISS_EMOJI: &str = "<:miss:1445495578862817280>";
 pub static BPM_EMOJI: &str = "<:bpm:1437855552100368384>";
 pub static TICK_MISS_EMOJI: &str = "<:slider_tick_miss:1441484864049123399>";
 pub static TAIL_MISS_EMOJI: &str = "<:slider_tail_miss:1441692017775083642>";

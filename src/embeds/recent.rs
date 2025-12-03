@@ -11,7 +11,7 @@ use crate::{
     embeds::{FAIL_EMBED_COLOR, MISSING_TEXT, PP_GAINED_TEXT},
     utils::{
         CommaFormat, CommaFormatFloat,
-        osu_pp::{cal_failed_pp, cal_score_pp_perf, calculate_nc_stats, is_fc, map_stats},
+        osu_pp::{cal_failed_pp, cal_score_perf, calculate_nc_stats, is_fc, map_stats},
         osu_utils::{
             BPM_EMOJI, TAIL_MISS_EMOJI, format_hits, format_slider_misses, formated_song_length,
             get_flag_url, grade_emoji, relative_timestamp, star_color_spectrum,
@@ -73,7 +73,7 @@ pub fn create(
     } else {
         score
             .pp
-            .unwrap_or_else(|| cal_score_pp_perf(perf_attrs.clone(), score) as f32)
+            .unwrap_or_else(|| cal_score_perf(perf_attrs.clone(), score).pp() as f32)
             .two_decimal()
     };
 
@@ -101,7 +101,7 @@ pub fn create(
     };
 
     let formatted_hits = format_hits(stats.great, stats.ok, stats.meh, stats.miss);
-    let formatted_slider_stats = format_slider_misses(score, beatmap)
+    let formatted_slider_stats = format_slider_misses(score, &beatmap)
         .map(|s| format!(" •  {s}"))
         .unwrap_or_default();
 

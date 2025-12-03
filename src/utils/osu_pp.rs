@@ -244,7 +244,7 @@ pub async fn cal_pp_download_beatmap(score: &Score) -> Result<f64, Error> {
     Ok(score_pp)
 }
 
-pub fn cal_score_pp_perf(perf_attrs: PerformanceAttributes, score: &Score) -> f64 {
+pub fn cal_score_perf(perf_attrs: PerformanceAttributes, score: &Score) -> PerformanceAttributes {
     let stats = &score.statistics;
     let is_classic = is_classic(&score.mods);
     perf_attrs
@@ -260,7 +260,6 @@ pub fn cal_score_pp_perf(perf_attrs: PerformanceAttributes, score: &Score) -> f6
         .n300(stats.great)
         .lazer(!is_classic)
         .calculate()
-        .pp()
 }
 
 pub fn cal_failed_pp(score: &Score, mods: GameMods, beatmap: &Beatmap) -> Option<f64> {
