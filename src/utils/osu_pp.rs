@@ -11,7 +11,7 @@ use rosu_pp::{
     Beatmap, Difficulty, GradualPerformance,
     any::{PerformanceAttributes, ScoreState},
     model::hit_object::HitObjectKind,
-    osu::{Osu as Osu_Pp, OsuScoreOrigin, OsuScoreState},
+    osu::{Osu as Osu_Pp, OsuHitResults, OsuScoreOrigin},
 };
 use rosu_v2::{
     model::Grade,
@@ -221,15 +221,15 @@ pub async fn cal_pp_download_beatmap(score: &Score) -> Result<f64, Error> {
     let mods = score.mods.clone();
 
     let diff_attrs = rosu_pp::Difficulty::new()
-        .mods(mods.clone())
+        .mods(mods.bits())
         .calculate_for_mode::<Osu_Pp>(beatmap)
         .unwrap();
 
     let score_pp = rosu_pp::Performance::new(diff_attrs)
-        .mods(mods)
+        .mods(mods.bits())
         .calculate()
         .performance()
-        .mods(score.mods.clone())
+        .mods(score.mods.bits())
         .combo(score.max_combo)
         .accuracy(score.accuracy as f64)
         .large_tick_hits(stats.large_tick_hit)
@@ -249,7 +249,7 @@ pub fn cal_score_perf(perf_attrs: PerformanceAttributes, score: &Score) -> Perfo
     let is_classic = is_classic(&score.mods);
     perf_attrs
         .performance()
-        .mods(score.mods.clone())
+        .mods(score.mods.bits())
         .combo(score.max_combo)
         .accuracy(score.accuracy as f64)
         .large_tick_hits(stats.large_tick_hit)
@@ -264,7 +264,7 @@ pub fn cal_score_perf(perf_attrs: PerformanceAttributes, score: &Score) -> Perfo
 
 pub fn cal_failed_pp(score: &Score, mods: GameMods, beatmap: &Beatmap) -> Option<f64> {
     let stats = &score.statistics;
-    let difficulty = Difficulty::new().mods(mods.clone());
+    let difficulty = Difficulty::new().mods(mods.bits());
     let mut gradual = GradualPerformance::new(difficulty, beatmap);
 
     let mut state = ScoreState {
@@ -298,7 +298,7 @@ pub fn map_stats(
     seconds_drain: u32,
 ) -> (PerformanceAttributes, MapStats) {
     let diff_attrs = rosu_pp::Difficulty::new()
-        .mods(mods.clone())
+        .mods(mods.bits())
         .calculate_for_mode::<Osu_Pp>(beatmap)
         .unwrap();
 
@@ -306,22 +306,22 @@ pub fn map_stats(
     let combo = diff_attrs.max_combo;
 
     let perf_attrs = rosu_pp::Performance::new(diff_attrs)
-        .mods(mods.clone())
+        .mods(mods.bits())
         .calculate();
 
     let pp = perf_attrs.pp();
 
-    let stats = beatmap.attributes().mods(mods).build();
+    let stats = beatmap.attributes().mods(mods.bits()).build();
 
     let (ar, od, cs, hp) = (
-        stats.ar.two_decimal(),
-        stats.od.two_decimal(),
-        stats.cs.two_decimal(),
-        stats.hp.two_decimal(),
+        stats.ar().two_decimal(),
+        stats.od().two_decimal(),
+        stats.cs().two_decimal(),
+        stats.hp().two_decimal(),
     );
 
-    let bpm = (beatmap.bpm() * { stats.clock_rate }).two_decimal();
-    let seconds_drain = (seconds_drain as f64 / stats.clock_rate) as u32;
+    let bpm = (beatmap.bpm() * { stats.clock_rate() }).two_decimal();
+    let seconds_drain = (seconds_drain as f64 / stats.clock_rate()) as u32;
 
     (
         perf_attrs,
@@ -382,24 +382,21 @@ pub fn calculate_nc_stats(
         stats.meh + miss_to_50,
     );
 
-    let mut state = OsuScoreState {
+    let nc_hit_results = OsuHitResults {
         n300: nc_300,
         n100: nc_100,
         n50: nc_50,
+        slider_end_hits: tail_hits,
+        small_tick_hits: max_stats.small_tick_hit,
+        large_tick_hits: max_stats.large_tick_hit,
         misses: 0,
-        ..OsuScoreState::new()
+        ..Default::default()
     };
 
-    if is_classic.not() {
-        state.slider_end_hits = stats.slider_tail_hit;
-        state.small_tick_hits = stats.small_tick_hit;
-        state.large_tick_hits = stats.large_tick_hit;
-    }
-
     let nc_acc = if is_classic {
-        state.accuracy(OsuScoreOrigin::Stable) * 100.0
+        nc_hit_results.accuracy(OsuScoreOrigin::Stable) * 100.0
     } else {
-        state.accuracy(OsuScoreOrigin::WithSliderAcc {
+        nc_hit_results.accuracy(OsuScoreOrigin::WithSliderAcc {
             max_large_ticks: max_stats.large_tick_hit,
             max_slider_ends: tail_hits,
         }) * 100.0
@@ -407,7 +404,7 @@ pub fn calculate_nc_stats(
 
     let nc_attrs = perf_attrs
         .performance()
-        .mods(score.mods.clone())
+        .mods(score.mods.bits())
         .n300(nc_300)
         .n100(nc_100)
         .n50(nc_50)

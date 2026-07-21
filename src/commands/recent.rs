@@ -13,6 +13,7 @@ use crate::{
     },
 };
 use poise::Context as PoiseContext;
+use rosu_v2::model::Grade;
 
 /// See an user's osu recent score with statistics
 #[poise::command(
@@ -79,6 +80,10 @@ pub async fn recent(
     let embed = create(player, &score, beatmap, None);
 
     let msg_handle = reply_with_embed(&ctx, embed.clone()).await?;
+
+    if score.grade == Grade::F {
+        return Ok(())
+    }
 
     let Ok(Ok(top_plays)) = top_plays_handle.await else {
         return Ok(());

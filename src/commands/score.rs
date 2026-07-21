@@ -82,31 +82,7 @@ pub async fn score(
 
     let embed = create(player, scores, beatmap, map, mapset, top_plays); 
 
-    let msg_handle = reply_with_embed(&ctx, embed.clone()).await?;
-
-
-    // let Ok(Ok(top_plays)) = top_plays_handle.await else {
-    //     return Ok(());
-    // };
-
-    // let Ok(is_top_result) = is_in_pb(top_plays.clone(), &score).await else {
-    //     return Ok(());
-    // };
-
-    // let updated_embed = match is_top_result {
-    //     IsPbResult::InPB(index) => edit_pb_score(
-    //         embed,
-    //         index,
-    //     ),
-    //     IsPbResult::MissingPB(index) => edit_missing_pb_score(
-    //         embed,
-    //         index,
-    //     ),
-    //     IsPbResult::IfRanked(index) => edit_if_ranked_pb(embed, index),
-    //     IsPbResult::NotPB => return Ok(()),
-    // };
-
-    // edit_message_embed(ctx, msg_handle, updated_embed).await;
+    reply_with_embed(&ctx, embed.clone()).await?;
 
     Ok(())
 }

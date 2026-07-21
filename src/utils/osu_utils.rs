@@ -385,7 +385,7 @@ pub fn grade_emoji(grade: Grade) -> String {
 }
 
 pub fn format_join_date(date: OffsetDateTime) -> String {
-    let format = format_description::parse(
+    let format = format_description::parse_borrowed::<1>(
         "Joined on [day padding:none] [month repr:long padding:none] [year] at [hour repr:12 padding:none]:[minute] [period case:lower] UTC +0",
     )
     .unwrap_or_default();
