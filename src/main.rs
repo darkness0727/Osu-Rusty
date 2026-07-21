@@ -5,9 +5,7 @@ use rosu_v2::Osu;
 use serenity::prelude::*;
 
 use crate::{
-    commands::{background::background, profile::profile, recent::recent, score::score, top::top},
-    resource_handler::create_all_dir,
-    utils::osu_utils::login,
+    commands::{background::background, link::{link, unlink}, profile::profile, recent::recent, score::score, top::top}, resource_handler::create_all_dir, utils::osu_utils::login,
 };
 
 mod commands;
@@ -20,6 +18,14 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 //type Context<'a> = poise::Context<'a, Data, Error>;
 
 pub static OSU_CLIENT: OnceCell<Osu> = OnceCell::new();
+use utils::database::UserDb;
+
+// Custom user data available to all commands
+pub struct Data {
+    pub db: UserDb,
+}
+
+pub type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
 async fn main() {
@@ -46,6 +52,7 @@ async fn start_discord_bot() {
     // Login with a bot token from the environment
     _ = dotenvy::from_path("./.env");
     let discord_token = dotenvy::var("DISCORD_TOKEN").expect("Missing `DISCORD_TOKEN` env var");
+    let db = UserDb::new("osu_bot.redb").expect("Failed to open database");
 
     // Set gateway intents, which decides what events the bot will be notified about
     let intents = GatewayIntents::GUILD_MESSAGES
@@ -53,46 +60,11 @@ async fn start_discord_bot() {
         | GatewayIntents::MESSAGE_CONTENT;
 
     let options = poise::FrameworkOptions {
-        commands: vec![profile(), recent(), top(), background(), score()],
+        commands: vec![profile(), recent(), top(), background(), score(), link(), unlink()],
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("?".into()),
             ..Default::default()
         },
-        // // The global error handler for all error cases that may occur
-        // // on_error: |error| Box::pin(on_error(error)),
-        // // This code is run before every command
-        // pre_command: |ctx| {
-        //     Box::pin(async move {
-        //         println!("Executing command {}...", ctx.command().qualified_name);
-        //     })
-        // },
-        // // This code is run after a command if it was successful (returned Ok)
-        // post_command: |ctx| {
-        //     Box::pin(async move {
-        //         println!("Executed command {}!", ctx.command().qualified_name);
-        //     })
-        // },
-        // // Every command invocation must pass this check to continue execution
-        // command_check: Some(|ctx| {
-        //     Box::pin(async move {
-        //         if ctx.author().id == 123456789 {
-        //             return Ok(false);
-        //         }
-        //         Ok(true)
-        //     })
-        // }),
-        // // Enforce command checks even for owners (enforced by default)
-        // // Set to true to bypass checks, which is useful for testing
-        // skip_checks_for_owners: false,
-        // event_handler: |_ctx, event, _framework, _data| {
-        //     Box::pin(async move {
-        //         println!(
-        //             "Got an event in event handler: {:?}",
-        //             event.snake_case_name()
-        //         );
-        //         Ok(())
-        //     })
-        // },
         ..Default::default()
     };
 
@@ -103,7 +75,7 @@ async fn start_discord_bot() {
                 poise::builtins::register_globally(ctx, &framework.options().commands)
                     .await
                     .unwrap();
-                Ok(())
+                Ok(Data { db })
             })
         })
         .options(options)

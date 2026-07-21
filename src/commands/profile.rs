@@ -1,10 +1,13 @@
+use rosu_v2::request::UserId;
+
 use crate::{
-    Error,
-    utils::discord_utils::check_reply_with_embed,
-    embeds::{error::player_not_found_embed, profile::create},
-    utils::osu_utils::fetch_player,
+    Context, Error,
+    embeds::{
+        error::{account_not_linked, player_not_found_embed},
+        profile::create,
+    },
+    utils::{discord_utils::check_reply_with_embed, osu_utils::fetch_player},
 };
-use poise::Context as PoiseContext;
 
 /// See an user's osu profile and stats
 #[poise::command(
@@ -16,15 +19,24 @@ use poise::Context as PoiseContext;
     aliases("osu")
 )]
 pub async fn profile(
-    ctx: PoiseContext<'_, (), Error>,
-    #[description = "Specify a user"] name: String,
+    ctx: Context<'_>,
+    #[description = "Specify a user"] name: Option<String>,
 ) -> Result<(), Error> {
+    let db = &ctx.data().db;
+    let Some(user_id) = name
+        .map(UserId::from)
+        .or_else(|| db.get_user_id(ctx.author().id.get()).ok().flatten())
+    else {
+        check_reply_with_embed(&ctx, account_not_linked()).await;
+        return Ok(());
+    };
+
     check_reply_with_embed(
         &ctx,
-        fetch_player(name.clone())
+        fetch_player(user_id.clone())
             .await
             .map(create)
-            .unwrap_or_else(|_| player_not_found_embed(name)),
+            .unwrap_or_else(|_| player_not_found_embed(user_id.to_string())),
     )
     .await;
     Ok(())

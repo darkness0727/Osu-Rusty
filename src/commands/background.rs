@@ -1,12 +1,12 @@
 use crate::{
-    Error,
+    Context, Error,
     embeds::error::{FailedMapErr, failed_embed_custom, failed_map},
     utils::{
         discord_utils::{check_reply, check_reply_with_embed},
         osu_utils::{fetch_map, fetch_mapset, parse_beatmap_url},
     },
 };
-use poise::{Context as PoiseContext, say_reply};
+use poise::say_reply;
 
 /// See an user's osu profile and stats
 #[poise::command(
@@ -18,7 +18,7 @@ use poise::{Context as PoiseContext, say_reply};
     aliases("bg")
 )]
 pub async fn background(
-    ctx: PoiseContext<'_, (), Error>,
+    ctx: Context<'_>,
     #[description = "Specify a map#"] map: String,
 ) -> Result<(), Error> {
     let ids = parse_beatmap_url(&map);
@@ -46,7 +46,7 @@ pub async fn background(
         };
         mapset.covers.card_2x
     } else {
-            let embed = failed_map(FailedMapErr::FailedUrlParse);
+        let embed = failed_map(FailedMapErr::FailedUrlParse);
         check_reply_with_embed(&ctx, embed).await;
         return Ok(());
     };

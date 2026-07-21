@@ -1,7 +1,9 @@
+use rosu_v2::request::UserId;
+
 use crate::{
-    Error,
+    Context, Error,
     embeds::{
-        error::{failed_embed, player_not_found_embed},
+        error::{account_not_linked, failed_embed, player_not_found_embed},
         recent::create,
     },
     utils::{
@@ -9,7 +11,6 @@ use crate::{
         osu_utils::{download_map_file, fetch_personal_bests, fetch_player, load_local_beatmap},
     },
 };
-use poise::Context as PoiseContext;
 
 /// See an user's osu recent score with statistics
 #[poise::command(
@@ -18,20 +19,29 @@ use poise::Context as PoiseContext;
     guild_only = false,
     install_context = "Guild|User",
     interaction_context = "Guild|BotDm|PrivateChannel",
-    aliases("rs", "r")
+    aliases("t")
 )]
 pub async fn top(
-    ctx: PoiseContext<'_, (), Error>,
-    #[description = "Specify a user"] name: String,
+    ctx: Context<'_>,
     #[description = "Specify which score"] index: usize,
+    #[description = "Specify a user"] name: Option<String>,
 ) -> Result<(), Error> {
-    let player_handle = tokio::spawn(fetch_player(name.clone()));
-    let top_plays_handle = tokio::spawn(fetch_personal_bests(name.clone(), index, 0));
+    let db = &ctx.data().db;
+    let Some(user_id) = name
+        .map(UserId::from)
+        .or_else(|| db.get_user_id(ctx.author().id.get()).ok().flatten())
+    else {
+        check_reply_with_embed(&ctx, account_not_linked()).await;
+        return Ok(());
+    };
+
+    let player_handle = tokio::spawn(fetch_player(user_id.clone()));
+    let top_plays_handle = tokio::spawn(fetch_personal_bests(user_id.clone(), index, 0));
 
     let player = match player_handle.await {
         Ok(Ok(player)) => player,
         _ => {
-            let embed = player_not_found_embed(name);
+            let embed = player_not_found_embed(user_id.to_string());
             check_reply_with_embed(&ctx, embed).await;
             return Ok(());
         }

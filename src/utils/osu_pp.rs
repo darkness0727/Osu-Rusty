@@ -354,9 +354,7 @@ pub fn calculate_nc_stats(
 
     let is_fail = !score.passed;
 
-    let misses = is_fail
-        .then(|| max_stats.great - total_hits)
-        .unwrap_or(stats.miss);
+    let misses = if is_fail { max_stats.great - total_hits } else { stats.miss };
 
     let tail_hits = if is_fail {
         match beatmap {
@@ -414,10 +412,8 @@ pub fn calculate_nc_stats(
 
     let nc_pp = nc_attrs.pp();
 
-    let slider_tail_miss = is_classic
-        .not()
-        .then(|| max_stats.slider_tail_hit - tail_hits)
-        .unwrap_or_default();
+    let slider_tail_miss = if is_classic
+        .not() { max_stats.slider_tail_hit - tail_hits } else { Default::default() };
 
     NoChokeStats {
         n300: nc_300,

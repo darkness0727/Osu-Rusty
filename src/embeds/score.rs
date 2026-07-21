@@ -95,9 +95,7 @@ pub fn create(
 
         let tail_miss = nc_stats.slider_tail_miss;
 
-        let nc_tail_misses = (tail_miss > 0)
-            .then(|| format!(" • {tail_miss}{TAIL_MISS_EMOJI}"))
-            .unwrap_or_default();
+        let nc_tail_misses = if tail_miss > 0 { format!(" • {tail_miss}{TAIL_MISS_EMOJI}") } else { Default::default() };
 
         format!(
             "**If FC** (__{nc_pp} PP__)  • {nc_formatted_hits} • **{nc_acc}%**{nc_tail_misses}\n"
@@ -196,7 +194,7 @@ fn other_scores_text(
     beatmap: &Beatmap,
     slider_count: u32,
 ) -> Vec<String> {
-    if scores.len() == 0 {
+    if scores.is_empty() {
         return vec![String::from("")];
     }
     let mut texts = vec![String::from("__Other scores on the beatmap:__")];

@@ -10,9 +10,7 @@ use regex::Regex;
 use reqwest::Url;
 use rosu_pp::Beatmap;
 use rosu_v2::{
-    error::OsuError,
-    model::Grade,
-    prelude::{BeatmapExtended, BeatmapsetExtended, Score, UserExtended},
+    error::OsuError, model::Grade, prelude::{BeatmapExtended, BeatmapsetExtended, Score, UserExtended}, request::UserId,
 };
 use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
@@ -23,29 +21,29 @@ pub async fn login(client_id: u64, client_secret: String) -> Result<rosu_v2::Osu
     rosu_v2::Osu::new(client_id, client_secret).await
 }
 
-pub async fn fetch_player(name: String) -> Result<UserExtended, OsuError> {
+pub async fn fetch_player(user: impl Into<UserId>) -> Result<UserExtended, OsuError> {
     let osu = OSU_CLIENT.get().unwrap();
-    osu.user(&name).await
+    osu.user(user).await
 }
 
 pub async fn fetch_recent_scores(
-    name: String,
+    user: impl Into<UserId>,
     amount: usize,
     include_false: bool,
 ) -> Result<Vec<Score>, OsuError> {
     let osu = OSU_CLIENT.get().unwrap();
 
-    osu.user_scores(&name)
+    osu.user_scores(user)
         .recent()
         .limit(amount)
         .include_fails(include_false)
         .await
 }
 
-pub async fn fetch_map_scores(name: String, map_id: u32) -> Result<Vec<Score>, OsuError> {
+pub async fn fetch_map_scores(user: impl Into<UserId>, map_id: u32) -> Result<Vec<Score>, OsuError> {
     let osu = OSU_CLIENT.get().unwrap();
 
-    osu.beatmap_user_scores(map_id, name).await
+    osu.beatmap_user_scores(map_id, user).await
 }
 
 pub async fn fetch_map(map_id: u32) -> Result<BeatmapExtended, OsuError> {
@@ -67,15 +65,16 @@ pub async fn fetch_mapset_from_diff(map_id: u32) -> Result<BeatmapsetExtended, O
 }
 
 pub async fn fetch_personal_bests(
-    name: String,
+    user: impl Into<UserId>,
     amount: usize,
     offset: usize,
 ) -> Result<Vec<Score>, Error> {
     let osu = OSU_CLIENT.get().unwrap();
     let max_per_call = 100;
+    let user: UserId = user.into();
 
     if amount <= max_per_call {
-        osu.user_scores(&name)
+        osu.user_scores(user)
             .best()
             .limit(amount)
             .offset(offset)
@@ -83,7 +82,7 @@ pub async fn fetch_personal_bests(
             .map_err(Into::into)
     } else {
         let top_plays_handle = tokio::spawn(
-            osu.user_scores(&name)
+            osu.user_scores(user.clone())
                 .best()
                 .limit(max_per_call)
                 .offset(offset)
@@ -94,7 +93,7 @@ pub async fn fetch_personal_bests(
         let second_offset = offset + max_per_call;
 
         let top_plays_handle_2 = tokio::spawn(
-            osu.user_scores(&name)
+            osu.user_scores(user)
                 .best()
                 .limit(second_limit)
                 .offset(second_offset)
@@ -114,24 +113,24 @@ pub async fn fetch_personal_bests(
 }
 
 pub async fn download_map_file(map_id: u32) -> Result<String, Error> {
-    let file_name = format!("{}.osu", map_id);
+    let file_user = format!("{}.osu", map_id);
 
-    if let Some(path) = get_resource_path(ResourceCategory::MapData, &file_name) {
+    if let Some(path) = get_resource_path(ResourceCategory::MapData, &file_user) {
         return Ok(path);
     }
 
     let map_data_url = format!("https://osu.ppy.sh/osu/{}", map_id);
     let map_response = reqwest::get(&map_data_url).await?;
     let map_data = map_response.bytes().await?;
-    let path = save_resource(ResourceCategory::MapData, &file_name, map_data)?;
+    let path = save_resource(ResourceCategory::MapData, &file_user, map_data)?;
     Ok(path)
 }
 
 pub fn load_local_beatmap(map_id: u32) -> Result<Beatmap, Error> {
-    let file_name = format!("{}.osu", map_id);
+    let file_user = format!("{}.osu", map_id);
 
     let path =
-        get_resource_path(ResourceCategory::MapData, &file_name).ok_or("beatmap not found")?;
+        get_resource_path(ResourceCategory::MapData, &file_user).ok_or("beatmap not found")?;
 
     let map = rosu_pp::Beatmap::from_path(path)?;
     map.check_suspicion()?;
@@ -179,11 +178,10 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
     let mut map_id: Option<u32> = None;
 
     // 1) Fragment (prefer this for map_id), e.g. "#osu/4924798" -> 4924798
-    if let Some(fragment) = url.fragment() {
-        if let Some(mat) = digit_re.find_iter(fragment).last() {
+    if let Some(fragment) = url.fragment()
+        && let Some(mat) = digit_re.find_iter(fragment).last() {
             map_id = mat.as_str().parse().ok();
         }
-    }
 
     // 2) Path segments — explicit patterns first
     if let Some(segments) = url.path_segments() {
@@ -196,11 +194,10 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
                         mapset_id = segs[i + 1].parse::<u32>().ok();
                     }
                 }
-                "beatmaps" | "beatmap" | "b" if i + 1 < segs.len() => {
-                    if map_id.is_none() {
+                "beatmaps" | "beatmap" | "b" if i + 1 < segs.len()
+                    && map_id.is_none() => {
                         map_id = segs[i + 1].parse::<u32>().ok();
                     }
-                }
                 _ => {}
             }
         }
@@ -234,13 +231,11 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
     }
 
     // 3) Query fallback (e.g. ?id=4924798), only if map_id still missing
-    if map_id.is_none() {
-        if let Some(q) = url.query() {
-            if let Some(mat) = digit_re.find_iter(q).last() {
+    if map_id.is_none()
+        && let Some(q) = url.query()
+            && let Some(mat) = digit_re.find_iter(q).last() {
                 map_id = mat.as_str().parse().ok();
             }
-        }
-    }
 
     ParsedUrlResult { mapset_id, map_id }
 }
@@ -272,7 +267,7 @@ pub struct ParsedUrlResult {
 }
 
 pub fn format_slider_misses(score: &Score, map: &Beatmap) -> Option<String> {
-    let stats = slider_tail_tick_miss(score, &map)?;
+    let stats = slider_tail_tick_miss(score, map)?;
 
     let tick_miss = stats.tick_miss;
     let tail_miss = stats.tail_miss;
@@ -284,13 +279,9 @@ pub fn format_slider_misses(score: &Score, map: &Beatmap) -> Option<String> {
         return None;
     };
 
-    let tick_miss_text = has_tick_miss
-        .then(|| format!("{tick_miss}{TICK_MISS_EMOJI}"))
-        .unwrap_or_default();
+    let tick_miss_text = if has_tick_miss { format!("{tick_miss}{TICK_MISS_EMOJI}") } else { Default::default() };
 
-    let tail_miss_text = has_tail_miss
-        .then(|| format!("{tail_miss}{TAIL_MISS_EMOJI}"))
-        .unwrap_or_default();
+    let tail_miss_text = if has_tail_miss { format!("{tail_miss}{TAIL_MISS_EMOJI}") } else { Default::default() };
 
     Some(format!("{tick_miss_text}{tail_miss_text}"))
 }

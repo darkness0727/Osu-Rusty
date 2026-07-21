@@ -7,6 +7,7 @@ use num_format::{Locale, ToFormattedString};
 pub mod discord_utils;
 pub mod osu_utils;
 pub mod osu_pp;
+pub mod database;
 
 pub fn save_file(bytes: Bytes, path: &str) -> Result<(), Error> {
     let mut file = File::create(path)?;

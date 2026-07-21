@@ -1,10 +1,7 @@
 use crate::{
-    Error,
-    embeds::{
-        error::{failed_embed, not_enough_scores, player_not_found_embed},
-        recent::{create, edit_if_ranked_pb, edit_missing_pb_recent, edit_pb_recent},
-    },
-    utils::{
+    Context, Error, embeds::{
+        error::{account_not_linked, failed_embed, not_enough_scores, player_not_found_embed}, recent::{create, edit_if_ranked_pb, edit_missing_pb_recent, edit_pb_recent},
+    }, utils::{
         discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed},
         osu_pp::{IsPbResult, is_in_pb, pp_gained_from_play},
         osu_utils::{
@@ -12,8 +9,7 @@ use crate::{
         },
     },
 };
-use poise::Context as PoiseContext;
-use rosu_v2::model::Grade;
+use rosu_v2::{model::Grade, request::UserId};
 
 /// See an user's osu recent score with statistics
 #[poise::command(
@@ -25,25 +21,34 @@ use rosu_v2::model::Grade;
     aliases("rs", "r")
 )]
 pub async fn recent(
-    ctx: PoiseContext<'_, (), Error>,
-    #[description = "Specify a user"] name: String,
+    ctx: Context<'_>,
+    #[description = "Specify a user"] name: Option<String>,
     #[description = "Specify which score"] index: Option<usize>,
     #[description = "Should only contain passes"] pass: Option<bool>,
 ) -> Result<(), Error> {
+    let db = &ctx.data().db;
+    let Some(user_id) = name
+        .map(UserId::from)
+        .or_else(|| db.get_user_id(ctx.author().id.get()).ok().flatten())
+    else {
+        check_reply_with_embed(&ctx, account_not_linked()).await;
+        return Ok(());
+    };
+
     let index = index.unwrap_or(1);
     let only_passes = pass.unwrap_or_default();
 
-    let player_handle = tokio::spawn(fetch_player(name.clone()));
+    let player_handle = tokio::spawn(fetch_player(user_id.clone()));
     let scores_handle = tokio::spawn(fetch_recent_scores(
-        name.clone(),
+        user_id.clone(),
         index,
         !only_passes,
     ));
-    let top_plays_handle = tokio::spawn(fetch_personal_bests(name.clone(), MAX_TOP_PLAY_COUNT, 0));
+    let top_plays_handle = tokio::spawn(fetch_personal_bests(user_id.clone(), MAX_TOP_PLAY_COUNT, 0));
     let player = match player_handle.await {
         Ok(Ok(player)) => player,
         _ => {
-            let embed = player_not_found_embed(name);
+            let embed = player_not_found_embed(user_id.to_string());
             check_reply_with_embed(&ctx, embed).await;
             return Ok(());
         }

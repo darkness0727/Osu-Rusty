@@ -1,5 +1,5 @@
-use crate::Error;
-use poise::{Context as PoiseContext, CreateReply, ReplyHandle};
+use crate::Context;
+use poise::{CreateReply, ReplyHandle};
 use serenity::{
     Result as SerenityResult,
     all::{CreateAllowedMentions, CreateEmbed},
@@ -17,7 +17,7 @@ pub fn check_edit(result: Result<(), serenity::Error>) {
     }
 }
 
-pub async fn check_reply_with_embed(ctx: &PoiseContext<'_, (), Error>, embed: CreateEmbed) {
+pub async fn check_reply_with_embed(ctx: &Context<'_>, embed: CreateEmbed) {
     let embed_reply = CreateReply::default()
         .embed(embed)
         .reply(true)
@@ -27,7 +27,7 @@ pub async fn check_reply_with_embed(ctx: &PoiseContext<'_, (), Error>, embed: Cr
 }
 
 pub async fn reply_with_embed<'a>(
-    ctx: &'a PoiseContext<'_, (), Error>,
+    ctx: &'a Context<'_>,
     embed: CreateEmbed,
 ) -> Result<ReplyHandle<'a>, serenity::Error> {
     let embed_reply = CreateReply::default()
@@ -38,7 +38,7 @@ pub async fn reply_with_embed<'a>(
     ctx.send(embed_reply).await
 }
 
-pub async fn edit_message_embed(ctx: PoiseContext<'_, (), Error>, handle: ReplyHandle<'_>, embed: CreateEmbed) {
+pub async fn edit_message_embed(ctx: Context<'_>, handle: ReplyHandle<'_>, embed: CreateEmbed) {
     let embed_reply = CreateReply::default()
         .embed(embed)
         .reply(true)

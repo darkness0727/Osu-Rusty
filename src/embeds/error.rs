@@ -8,6 +8,12 @@ pub fn player_not_found_embed(name: String) -> CreateEmbed {
         .description(format!("User `{name}` was not found"))
 }
 
+pub fn account_not_linked() -> CreateEmbed {
+    CreateEmbed::new()
+        .color(FAIL_EMBED_COLOR)
+        .description("No Osu! account linked with discord, run /link".to_string())
+}
+
 pub fn not_enough_scores(name: String, length: usize, only_passes: bool) -> CreateEmbed {
     let description = if only_passes {
         match length {
