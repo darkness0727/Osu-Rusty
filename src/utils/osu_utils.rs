@@ -201,10 +201,8 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
 
         for i in 0..segs.len() {
             match segs[i] {
-                "beatmapsets" if i + 1 < segs.len() => {
-                    if mapset_id.is_none() {
-                        mapset_id = segs[i + 1].parse::<u32>().ok();
-                    }
+                "beatmapsets" if i + 1 < segs.len() && mapset_id.is_none() => {
+                    mapset_id = segs[i + 1].parse::<u32>().ok();
                 }
                 "beatmaps" | "beatmap" | "b" if i + 1 < segs.len()
                     && map_id.is_none() => {
@@ -222,22 +220,14 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
                 .filter_map(|m| m.as_str().parse::<u32>().ok())
                 .collect();
 
-            if !path_digits.is_empty() {
-                if path_digits.len() > 1 {
-                    // multiple numbers in path -> last one is likely the map_id
+            match path_digits.len() {
+                len if len > 1 => {
                     map_id = path_digits.last().cloned();
-                } else {
-                    // exactly one numeric token in path:
-                    // only treat it as map_id if we didn't already identify it as mapset_id
-                    let only = path_digits[0];
-                    if mapset_id.is_none() {
-                        // no mapset found -> this single number is probably a map_id (e.g. /beatmap/4924798)
-                        map_id = Some(only);
-                    } else {
-                        // mapset_id exists and it's the only number in path -> do NOT set map_id
-                        // (this prevents treating /beatmapsets/2285243 as map_id)
-                    }
                 }
+                1 if mapset_id.is_none() => {
+                    map_id = Some(path_digits[0]);
+                }
+                _ => {}
             }
         }
     }

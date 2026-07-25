@@ -346,18 +346,15 @@ pub fn calculate_nc_stats(
 
     let misses = if is_fail { max_stats.great - total_hits } else { stats.miss };
 
-    let tail_hits = if is_fail {
-        match beatmap {
-            Some(map) => {
-                let tick_misses = slider_tail_tick_miss(score, map)
-                    .map(|r| r.tail_miss)
-                    .unwrap_or_default();
-                max_stats.slider_tail_hit - tick_misses
-            }
-            None => max_stats.slider_tail_hit,
+    let tail_hits = match (is_fail, beatmap) {
+        (true, Some(map)) => {
+            let tick_misses = slider_tail_tick_miss(score, map)
+                .map(|r| r.tail_miss)
+                .unwrap_or_default();
+            max_stats.slider_tail_hit - tick_misses
         }
-    } else {
-        stats.slider_tail_hit
+        (true, None) => max_stats.slider_tail_hit,
+        (false, _) => stats.slider_tail_hit,
     };
 
     let miss_to_300 = (misses as f32 * ratio_300).round() as u32;

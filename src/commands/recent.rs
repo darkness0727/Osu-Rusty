@@ -86,27 +86,15 @@ pub async fn recent(
         return Ok(());
     };
 
+    let map_scores = map_scores_handle.await.ok().and_then(|r| r.ok()).unwrap_or_default();
+
+    let pp_gained = pp_gained_from_play(&top_plays, &score, &map_scores)
+        .await
+        .unwrap_or_default();
+
     let updated_embed = match is_top_result {
-        IsPbResult::InPB(index) => {
-            let map_scores = map_scores_handle.await.ok().and_then(|r| r.ok()).unwrap_or_default();
-            edit_pb_recent(
-                embed,
-                index,
-                pp_gained_from_play(&top_plays, &score, &map_scores)
-                    .await
-                    .unwrap_or_default(),
-            )
-        }
-        IsPbResult::MissingPB(index) => {
-            let map_scores = map_scores_handle.await.ok().and_then(|r| r.ok()).unwrap_or_default();
-            edit_missing_pb_recent(
-                embed,
-                index,
-                pp_gained_from_play(&top_plays, &score, &map_scores)
-                    .await
-                    .unwrap_or_default(),
-            )
-        }
+        IsPbResult::InPB(index) => edit_pb_recent(embed, index, pp_gained),
+        IsPbResult::MissingPB(index) => edit_missing_pb_recent(embed, index, pp_gained),
         IsPbResult::IfRanked(index) => edit_if_ranked_pb(embed, index),
         IsPbResult::NotPB => return Ok(()),
     };

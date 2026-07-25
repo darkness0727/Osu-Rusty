@@ -30,28 +30,25 @@ pub async fn background(
         return Ok(());
     };
 
-    let url = if let Some(map_id) = ids.map_id {
+    if let Some(map_id) = ids.map_id {
         tracing::debug!("{map_id}");
         let Ok(Some(mapset)) = fetch_map(map_id).await.map(|m| m.mapset) else {
-            let embed = failed_map(FailedMapErr::MapNotFound);
-            check_reply_with_embed(&ctx, embed).await;
+            check_reply_with_embed(&ctx, failed_map(FailedMapErr::MapNotFound)).await;
             return Ok(());
         };
-        mapset.covers.card_2x
-    } else if let Some(mapset_id) = ids.mapset_id {
-        let Ok(mapset) = fetch_mapset(mapset_id).await else {
-            let embed = failed_map(FailedMapErr::MapNotFound);
-            check_reply_with_embed(&ctx, embed).await;
-            return Ok(());
-        };
-        mapset.covers.card_2x
-    } else {
-        let embed = failed_map(FailedMapErr::FailedUrlParse);
-        check_reply_with_embed(&ctx, embed).await;
+        check_reply(say_reply(ctx, mapset.covers.card_2x).await);
         return Ok(());
-    };
+    }
 
-    check_reply(say_reply(ctx, url).await);
+    if let Some(mapset_id) = ids.mapset_id {
+        let Ok(mapset) = fetch_mapset(mapset_id).await else {
+            check_reply_with_embed(&ctx, failed_map(FailedMapErr::MapNotFound)).await;
+            return Ok(());
+        };
+        check_reply(say_reply(ctx, mapset.covers.card_2x).await);
+        return Ok(());
+    }
 
+    check_reply_with_embed(&ctx, failed_map(FailedMapErr::FailedUrlParse)).await;
     Ok(())
 }
