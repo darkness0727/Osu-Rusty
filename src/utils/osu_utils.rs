@@ -133,7 +133,7 @@ pub async fn download_map_file(map_id: u32) -> Result<String, Error> {
 
 pub fn load_local_beatmap(map_id: u32) -> Result<Beatmap, Error> {
     {
-        let cache = BEATMAP_CACHE.lock().unwrap();
+        let cache = BEATMAP_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(map) = cache.get(&map_id) {
             return Ok(map.clone());
         }
@@ -147,7 +147,7 @@ pub fn load_local_beatmap(map_id: u32) -> Result<Beatmap, Error> {
     let map = rosu_pp::Beatmap::from_path(path)?;
     map.check_suspicion()?;
 
-    BEATMAP_CACHE.lock().unwrap().insert(map_id, map.clone());
+    BEATMAP_CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(map_id, map.clone());
 
     Ok(map)
 }
@@ -263,7 +263,7 @@ pub fn highest_pp_score(mut scores: Vec<Score>) -> Option<(Score, Vec<Score>)> {
         .iter()
         .enumerate()
         .filter_map(|(i, s)| s.pp.map(|pp| (pp, i)))
-        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+        .max_by(|a, b| a.0.total_cmp(&b.0))
         .map(|(_, idx)| idx)
         .unwrap_or(0);
 

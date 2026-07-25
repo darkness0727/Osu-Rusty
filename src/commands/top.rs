@@ -2,7 +2,7 @@ use crate::{
     Context, Error,
     utils::command_helpers::{fetch_beatmap_or_reply, fetch_player_or_reply, resolve_user_id, show_typing},
     embeds::{
-        error::account_not_linked,
+        error::{account_not_linked, not_enough_scores},
         recent::create,
     },
     utils::{
@@ -40,6 +40,12 @@ pub async fn top(
     let Ok(Ok(top_plays)) = top_plays_handle.await else {
         return Ok(());
     };
+
+    if index == 0 || top_plays.len() < index {
+        let embed = not_enough_scores(player.username.to_string(), top_plays.len(), false);
+        check_reply_with_embed(&ctx, embed).await;
+        return Ok(());
+    }
 
     let score = top_plays[index - 1].clone();
     let map_id = score.map_id;

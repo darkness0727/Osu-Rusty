@@ -55,7 +55,7 @@ pub async fn recent(
     };
 
     let length = recent_scores.len();
-    if length < index {
+    if index == 0 || length < index {
         let embed = not_enough_scores(name, length, only_passes);
         check_reply_with_embed(&ctx, embed).await;
         return Ok(());

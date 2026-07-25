@@ -1,5 +1,3 @@
-use std::ops::Not;
-
 use rosu_pp::{Beatmap, any::PerformanceAttributes};
 use rosu_v2::{
     model::Grade,
@@ -83,7 +81,7 @@ pub fn compute_score_embed_parts(
 
     let stats = &score.statistics;
 
-    let nc_stats = if is_fc(score, map_combo, count_sliders).not() {
+    let nc_stats = if !is_fc(score, map_combo, count_sliders) {
         let nc_stats = calculate_nc_stats(perf_attrs.clone(), score, Some(beatmap));
 
         let nc_pp = nc_stats.pp.format();

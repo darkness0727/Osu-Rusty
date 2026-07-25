@@ -28,7 +28,7 @@ pub fn create(
     top_plays: Option<Vec<Score>>,
 ) -> CreateEmbed {
     let Some((score, other_scores)) = highest_pp_score(scores) else {
-        return failed_embed_custom(String::from("No were scores found"));
+        return failed_embed_custom(String::from("No scores found"));
     };
     let score = &score;
 
