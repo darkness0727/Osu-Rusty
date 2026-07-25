@@ -4,7 +4,7 @@ use crate::{
     Error,
     utils::{
         CommaFormatFloat,
-        osu_utils::{MAX_TOP_PLAY_COUNT, download_map_file, fetch_map_scores, load_local_beatmap},
+        osu_utils::{MAX_TOP_PLAY_COUNT, download_map_file, load_local_beatmap},
     },
 };
 use rosu_pp::{
@@ -63,16 +63,14 @@ pub fn is_classic(mods: &GameMods) -> bool {
 pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult, Error> {
     let ranked = score.pp.is_some();
 
-    let mut score_id_to_index = HashMap::with_capacity(top_plays.len());
     let mut map_id_to_pp = HashMap::with_capacity(top_plays.len());
-    for (index, score) in top_plays.iter().enumerate() {
-        score_id_to_index.insert(score.id, index);
-        map_id_to_pp.insert(score.map_id, score.pp.unwrap_or_default());
+    for s in top_plays.iter() {
+        map_id_to_pp.insert(s.map_id, s.pp.unwrap_or_default());
     }
 
     // check for score ID match
-    if let Some(i) = score_id_to_index.get(&score.id) {
-        return Ok(IsPbResult::InPB(*i + 1));
+    if let Some(i) = top_plays.iter().position(|s| s.id == score.id) {
+        return Ok(IsPbResult::InPB(i + 1));
     }
 
     let score_pp = match score.pp {
@@ -98,15 +96,7 @@ pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult
 
 /// Checks if score id is in top plays
 pub fn pb_index_id_match(top_plays: Vec<Score>, score: &Score) -> Option<usize> {
-    let mut score_id_to_index = HashMap::with_capacity(top_plays.len());
-    let mut map_id_to_pp = HashMap::with_capacity(top_plays.len());
-    for (index, score) in top_plays.iter().enumerate() {
-        score_id_to_index.insert(score.id, index);
-        map_id_to_pp.insert(score.map_id, score.pp.unwrap_or_default());
-    }
-
-    // check for score ID match
-    score_id_to_index.get(&score.id).map(|i| *i + 1)
+    top_plays.iter().position(|s| s.id == score.id).map(|i| i + 1)
 }
 
 pub enum IsPbResult {
@@ -121,7 +111,7 @@ pub enum IsPbResult {
 pub async fn pp_gained_from_play(
     top_plays: Vec<Score>,
     score: &Score,
-    username: String,
+    map_scores: Vec<Score>,
 ) -> Result<f32, Error> {
     let Some(score_pp) = score.pp else {
         return Err("score is not ranked".into());
@@ -158,7 +148,6 @@ pub async fn pp_gained_from_play(
         top_pps.sort_by(|a, b| b.total_cmp(a));
         top_pps.push(*top_pps.last().unwrap_or(&0.0));
     }
-    let map_scores = fetch_map_scores(username, score.map_id).await?;
 
     // remove newer map scores than the score, newer score cant be higher in PP
     // because we return if a newer score with higher PP is found;
@@ -187,8 +176,9 @@ pub fn what_if_pp(mut top_pps: Vec<f32>, score_pp: f32) -> f64 {
         .map(|(index, pp)| *pp as f64 * 0.95f64.powi(index as i32))
         .sum();
 
-    top_pps.push(score_pp);
-    top_pps.sort_by(|a, b| b.total_cmp(a));
+    match top_pps.binary_search_by(|pp| score_pp.total_cmp(pp)) {
+        Ok(i) | Err(i) => top_pps.insert(i, score_pp),
+    }
     top_pps.truncate(MAX_TOP_PLAY_COUNT);
 
     let weighted_total_after: f64 = top_pps

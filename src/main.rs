@@ -62,7 +62,7 @@ async fn start_discord_bot() {
     let options = poise::FrameworkOptions {
         commands: vec![profile(), recent(), top(), background(), score(), link(), unlink()],
         prefix_options: poise::PrefixFrameworkOptions {
-            prefix: Some("?".into()),
+            prefix: Some("<".into()),
             ..Default::default()
         },
         ..Default::default()

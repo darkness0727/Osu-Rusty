@@ -213,7 +213,7 @@ fn other_scores_text(
 
         let pp = score
             .pp
-            .unwrap_or_else(|| cal_score_perf(score_performance, score).pp() as f32)
+            .unwrap_or_else(|| score_performance.pp() as f32)
             .two_decimal();
 
         let grade = grade_emoji(score.grade);

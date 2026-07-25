@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashMap, sync::{LazyLock, Mutex}, time::Duration};
 
 use crate::{
     Error, OSU_CLIENT,
@@ -16,6 +16,11 @@ use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
 
 pub static MAX_TOP_PLAY_COUNT: usize = 200;
+
+static DIGIT_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\d+").unwrap());
+
+static BEATMAP_CACHE: LazyLock<Mutex<HashMap<u32, Beatmap>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub async fn login(client_id: u64, client_secret: String) -> Result<rosu_v2::Osu, OsuError> {
     rosu_v2::Osu::new(client_id, client_secret).await
@@ -127,6 +132,13 @@ pub async fn download_map_file(map_id: u32) -> Result<String, Error> {
 }
 
 pub fn load_local_beatmap(map_id: u32) -> Result<Beatmap, Error> {
+    {
+        let cache = BEATMAP_CACHE.lock().unwrap();
+        if let Some(map) = cache.get(&map_id) {
+            return Ok(map.clone());
+        }
+    }
+
     let file_user = format!("{}.osu", map_id);
 
     let path =
@@ -134,6 +146,8 @@ pub fn load_local_beatmap(map_id: u32) -> Result<Beatmap, Error> {
 
     let map = rosu_pp::Beatmap::from_path(path)?;
     map.check_suspicion()?;
+
+    BEATMAP_CACHE.lock().unwrap().insert(map_id, map.clone());
 
     Ok(map)
 }
@@ -172,14 +186,12 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
         }
     };
 
-    let digit_re = Regex::new(r"\d+").unwrap();
-
     let mut mapset_id: Option<u32> = None;
     let mut map_id: Option<u32> = None;
 
     // 1) Fragment (prefer this for map_id), e.g. "#osu/4924798" -> 4924798
     if let Some(fragment) = url.fragment()
-        && let Some(mat) = digit_re.find_iter(fragment).last() {
+        && let Some(mat) = DIGIT_RE.find_iter(fragment).last() {
             map_id = mat.as_str().parse().ok();
         }
 
@@ -205,7 +217,7 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
         // 2b) Path fallback: consider last numeric token in the path only in safe cases
         if map_id.is_none() {
             // collect all numeric tokens in the path
-            let path_digits: Vec<u32> = digit_re
+            let path_digits: Vec<u32> = DIGIT_RE
                 .find_iter(url.path())
                 .filter_map(|m| m.as_str().parse::<u32>().ok())
                 .collect();
@@ -233,7 +245,7 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
     // 3) Query fallback (e.g. ?id=4924798), only if map_id still missing
     if map_id.is_none()
         && let Some(q) = url.query()
-            && let Some(mat) = digit_re.find_iter(q).last() {
+            && let Some(mat) = DIGIT_RE.find_iter(q).last() {
                 map_id = mat.as_str().parse().ok();
             }
 

@@ -5,7 +5,7 @@ use crate::{
         discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed},
         osu_pp::{IsPbResult, is_in_pb, pp_gained_from_play},
         osu_utils::{
-            MAX_TOP_PLAY_COUNT, download_map_file, fetch_personal_bests, fetch_player, fetch_recent_scores, load_local_beatmap
+            MAX_TOP_PLAY_COUNT, download_map_file, fetch_map_scores, fetch_personal_bests, fetch_player, fetch_recent_scores, load_local_beatmap
         },
     },
 };
@@ -90,6 +90,8 @@ pub async fn recent(
         return Ok(())
     }
 
+    let map_scores_handle = tokio::spawn(fetch_map_scores(user_id.clone(), map_id));
+
     let Ok(Ok(top_plays)) = top_plays_handle.await else {
         return Ok(());
     };
@@ -99,20 +101,26 @@ pub async fn recent(
     };
 
     let updated_embed = match is_top_result {
-        IsPbResult::InPB(index) => edit_pb_recent(
-            embed,
-            index,
-            pp_gained_from_play(top_plays, &score, name)
-                .await
-                .unwrap_or_default(),
-        ),
-        IsPbResult::MissingPB(index) => edit_missing_pb_recent(
-            embed,
-            index,
-            pp_gained_from_play(top_plays, &score, name)
-                .await
-                .unwrap_or_default(),
-        ),
+        IsPbResult::InPB(index) => {
+            let map_scores = map_scores_handle.await.ok().and_then(|r| r.ok()).unwrap_or_default();
+            edit_pb_recent(
+                embed,
+                index,
+                pp_gained_from_play(top_plays, &score, map_scores)
+                    .await
+                    .unwrap_or_default(),
+            )
+        }
+        IsPbResult::MissingPB(index) => {
+            let map_scores = map_scores_handle.await.ok().and_then(|r| r.ok()).unwrap_or_default();
+            edit_missing_pb_recent(
+                embed,
+                index,
+                pp_gained_from_play(top_plays, &score, map_scores)
+                    .await
+                    .unwrap_or_default(),
+            )
+        }
         IsPbResult::IfRanked(index) => edit_if_ranked_pb(embed, index),
         IsPbResult::NotPB => return Ok(()),
     };
