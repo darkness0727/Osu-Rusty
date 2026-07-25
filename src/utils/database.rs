@@ -63,12 +63,10 @@ impl UserDb {
     /// Remove a user's link if they want to unlink
     pub fn remove_user_id(&self, discord_id: u64) -> Result<bool, Error> {
         let write_txn = self.db.begin_write()?;
-        let removed = {
-            let mut table = write_txn.open_table(USER_ID_TABLE)?;
-            table.remove(discord_id)?.is_some()
-        };
+        let removed_id = write_txn.open_table(USER_ID_TABLE)?.remove(discord_id)?.is_some();
+        let removed_name = write_txn.open_table(USER_NAME_TABLE)?.remove(discord_id)?.is_some();
         write_txn.commit()?;
-        Ok(removed)
+        Ok(removed_id || removed_name)
     }
 }
 

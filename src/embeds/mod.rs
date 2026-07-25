@@ -1,3 +1,4 @@
+pub mod common;
 pub mod error;
 pub mod profile;
 pub mod recent;

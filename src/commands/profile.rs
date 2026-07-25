@@ -1,12 +1,11 @@
-use rosu_v2::request::UserId;
-
 use crate::{
     Context, Error,
+    utils::command_helpers::{fetch_player_or_reply, resolve_user_id, show_typing},
     embeds::{
-        error::{account_not_linked, player_not_found_embed},
+        error::account_not_linked,
         profile::create,
     },
-    utils::{discord_utils::check_reply_with_embed, osu_utils::fetch_player},
+    utils::discord_utils::check_reply_with_embed,
 };
 
 /// See an user's osu profile and stats
@@ -22,22 +21,17 @@ pub async fn profile(
     ctx: Context<'_>,
     #[description = "Specify a user"] name: Option<String>,
 ) -> Result<(), Error> {
-    let db = &ctx.data().db;
-    let Some(user_id) = name
-        .map(UserId::from)
-        .or_else(|| db.get_user_id(ctx.author().id.get()).ok().flatten())
-    else {
+    show_typing(&ctx).await?;
+    let Some(user_id) = resolve_user_id(&ctx, name).await else {
         check_reply_with_embed(&ctx, account_not_linked()).await;
         return Ok(());
     };
 
-    check_reply_with_embed(
-        &ctx,
-        fetch_player(user_id.clone())
-            .await
-            .map(create)
-            .unwrap_or_else(|_| player_not_found_embed(user_id.to_string())),
-    )
-    .await;
+    let embed = match fetch_player_or_reply(&ctx, &user_id).await {
+        Some(player) => create(player),
+        None => return Ok(()),
+    };
+
+    check_reply_with_embed(&ctx, embed).await;
     Ok(())
 }

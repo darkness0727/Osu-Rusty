@@ -59,9 +59,7 @@ pub enum FailedMapErr {
 }
 
 pub fn failed_embed() -> CreateEmbed {
-    CreateEmbed::new()
-        .color(FAIL_EMBED_COLOR)
-        .description("Something went wrong".to_string())
+    failed_embed_custom("Something went wrong".into())
 }
 
 pub fn failed_embed_custom(custom_err: String) -> CreateEmbed {

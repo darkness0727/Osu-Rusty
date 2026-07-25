@@ -1,15 +1,17 @@
 use crate::{
-    Context, Error, embeds::{
-        error::{account_not_linked, failed_embed, not_enough_scores, player_not_found_embed}, recent::{create, edit_if_ranked_pb, edit_missing_pb_recent, edit_pb_recent},
-    }, utils::{
+    Context, Error,
+    utils::command_helpers::{fetch_beatmap_or_reply, fetch_player_or_reply, resolve_user_id, show_typing},
+    embeds::{
+        error::{account_not_linked, not_enough_scores},
+        recent::{create, edit_if_ranked_pb, edit_missing_pb_recent, edit_pb_recent},
+    },
+    utils::{
         discord_utils::{check_reply_with_embed, edit_message_embed, reply_with_embed},
         osu_pp::{IsPbResult, is_in_pb, pp_gained_from_play},
-        osu_utils::{
-            MAX_TOP_PLAY_COUNT, download_map_file, fetch_map_scores, fetch_personal_bests, fetch_player, fetch_recent_scores, load_local_beatmap
-        },
+        osu_utils::{fetch_map_scores, fetch_personal_bests, fetch_recent_scores, MAX_TOP_PLAY_COUNT},
     },
 };
-use rosu_v2::{model::Grade, request::UserId};
+use rosu_v2::model::Grade;
 
 /// See an user's osu recent score with statistics
 #[poise::command(
@@ -26,11 +28,8 @@ pub async fn recent(
     #[description = "Specify which score"] index: Option<usize>,
     #[description = "Should only contain passes"] pass: Option<bool>,
 ) -> Result<(), Error> {
-    let db = &ctx.data().db;
-    let Some(user_id) = name
-        .map(UserId::from)
-        .or_else(|| db.get_user_id(ctx.author().id.get()).ok().flatten())
-    else {
+    show_typing(&ctx).await?;
+    let Some(user_id) = resolve_user_id(&ctx, name).await else {
         check_reply_with_embed(&ctx, account_not_linked()).await;
         return Ok(());
     };
@@ -38,20 +37,15 @@ pub async fn recent(
     let index = index.unwrap_or(1);
     let only_passes = pass.unwrap_or_default();
 
-    let player_handle = tokio::spawn(fetch_player(user_id.clone()));
     let scores_handle = tokio::spawn(fetch_recent_scores(
         user_id.clone(),
         index,
         !only_passes,
     ));
     let top_plays_handle = tokio::spawn(fetch_personal_bests(user_id.clone(), MAX_TOP_PLAY_COUNT, 0));
-    let player = match player_handle.await {
-        Ok(Ok(player)) => player,
-        _ => {
-            let embed = player_not_found_embed(user_id.to_string());
-            check_reply_with_embed(&ctx, embed).await;
-            return Ok(());
-        }
+
+    let Some(player) = fetch_player_or_reply(&ctx, &user_id).await else {
+        return Ok(());
     };
     let name = player.username.to_string();
 
@@ -70,15 +64,7 @@ pub async fn recent(
     let score = recent_scores[index - 1].clone();
     let map_id = score.map_id;
 
-    if let Err(err) = download_map_file(map_id).await {
-        tracing::error!("{err}");
-        check_reply_with_embed(&ctx, failed_embed()).await;
-        return Ok(());
-    }
-
-    let Ok(beatmap) = load_local_beatmap(map_id) else {
-        tracing::warn!("failed to parse or missing beatmap");
-        check_reply_with_embed(&ctx, failed_embed()).await;
+    let Some(beatmap) = fetch_beatmap_or_reply(&ctx, map_id).await else {
         return Ok(());
     };
 
@@ -96,7 +82,7 @@ pub async fn recent(
         return Ok(());
     };
 
-    let Ok(is_top_result) = is_in_pb(top_plays.clone(), &score).await else {
+    let Ok(is_top_result) = is_in_pb(&top_plays, &score).await else {
         return Ok(());
     };
 
@@ -106,7 +92,7 @@ pub async fn recent(
             edit_pb_recent(
                 embed,
                 index,
-                pp_gained_from_play(top_plays, &score, map_scores)
+                pp_gained_from_play(&top_plays, &score, &map_scores)
                     .await
                     .unwrap_or_default(),
             )
@@ -116,7 +102,7 @@ pub async fn recent(
             edit_missing_pb_recent(
                 embed,
                 index,
-                pp_gained_from_play(top_plays, &score, map_scores)
+                pp_gained_from_play(&top_plays, &score, &map_scores)
                     .await
                     .unwrap_or_default(),
             )

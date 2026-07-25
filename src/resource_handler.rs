@@ -1,8 +1,6 @@
 use std::{fs, io, path::Path};
 
 use bytes::Bytes;
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
 
 use crate::{Error, utils::save_file};
 
@@ -34,7 +32,7 @@ pub fn get_resource_path(category: ResourceCategory, name: &str) -> Option<Strin
 }
 
 pub fn create_all_dir() -> io::Result<()> {
-    for category in ResourceCategory::iter() {
+    for category in [ResourceCategory::Score, ResourceCategory::MapData] {
         let path = category_path(category);
         fs::create_dir_all(&path)?;
     }
@@ -49,7 +47,7 @@ fn category_path(category: ResourceCategory) -> String {
     }
 }
 
-#[derive(EnumIter)]
+#[derive(Clone, Copy)]
 pub enum ResourceCategory {
     Score,
     MapData,

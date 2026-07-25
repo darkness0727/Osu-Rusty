@@ -60,7 +60,7 @@ pub fn is_classic(mods: &GameMods) -> bool {
 }
 
 /// Returns if the score is present in the top200 and its index. if the PP is high enough be present in the top200, the index.
-pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult, Error> {
+pub async fn is_in_pb(top_plays: &[Score], score: &Score) -> Result<IsPbResult, Error> {
     let ranked = score.pp.is_some();
 
     let mut map_id_to_pp = HashMap::with_capacity(top_plays.len());
@@ -95,7 +95,7 @@ pub async fn is_in_pb(top_plays: Vec<Score>, score: &Score) -> Result<IsPbResult
 }
 
 /// Checks if score id is in top plays
-pub fn pb_index_id_match(top_plays: Vec<Score>, score: &Score) -> Option<usize> {
+pub fn pb_index_id_match(top_plays: &[Score], score: &Score) -> Option<usize> {
     top_plays.iter().position(|s| s.id == score.id).map(|i| i + 1)
 }
 
@@ -109,9 +109,9 @@ pub enum IsPbResult {
 /// only accurate if the score is your most recent top play, as otherwise
 /// the top plays have changed making the value inaccurate
 pub async fn pp_gained_from_play(
-    top_plays: Vec<Score>,
+    top_plays: &[Score],
     score: &Score,
-    map_scores: Vec<Score>,
+    map_scores: &[Score],
 ) -> Result<f32, Error> {
     let Some(score_pp) = score.pp else {
         return Err("score is not ranked".into());

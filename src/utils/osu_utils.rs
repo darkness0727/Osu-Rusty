@@ -284,28 +284,21 @@ pub fn format_slider_misses(score: &Score, map: &Beatmap) -> Option<String> {
     let tick_miss = stats.tick_miss;
     let tail_miss = stats.tail_miss;
 
-    let has_tick_miss = tick_miss > 0;
-    let has_tail_miss = tail_miss > 0;
+    let tick_miss_text = format_slider_tick_misses_from_stats(tick_miss);
+    let tail_miss_text = if tail_miss > 0 { format!("{tail_miss}{TAIL_MISS_EMOJI}") } else { Default::default() };
 
-    if !has_tick_miss && !has_tail_miss {
-        return None;
-    };
-
-    let tick_miss_text = if has_tick_miss { format!("{tick_miss}{TICK_MISS_EMOJI}") } else { Default::default() };
-
-    let tail_miss_text = if has_tail_miss { format!("{tail_miss}{TAIL_MISS_EMOJI}") } else { Default::default() };
-
-    Some(format!("{tick_miss_text}{tail_miss_text}"))
+    let has_any = !tick_miss_text.is_empty() || !tail_miss_text.is_empty();
+    has_any.then(|| format!("{tick_miss_text}{tail_miss_text}"))
 }
 
 pub fn format_slider_tick_misses(score: &Score, map: &Beatmap) -> Option<String> {
     let stats = slider_tail_tick_miss(score, map)?;
+    let text = format_slider_tick_misses_from_stats(stats.tick_miss);
+    (!text.is_empty()).then_some(text)
+}
 
-    let tick_miss = stats.tick_miss;
-
-    let has_tick_miss = tick_miss > 0;
-
-    has_tick_miss.then(|| format!("{tick_miss}{TICK_MISS_EMOJI}"))
+fn format_slider_tick_misses_from_stats(tick_miss: u32) -> String {
+    if tick_miss > 0 { format!("{tick_miss}{TICK_MISS_EMOJI}") } else { Default::default() }
 }
 
 /// Color spectrum interpolation for star rating.

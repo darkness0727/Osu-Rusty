@@ -1,13 +1,16 @@
 use rosu_v2::prelude::UserExtended;
-use serenity::all::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter};
+use serenity::all::CreateEmbed;
 
 use crate::{
-    embeds::{DEFAULT_EMBED_COLOR, error::failed_embed_custom},
-    utils::{
-        CommaFormat, CommaFormatFloat, 
+    embeds::{
+        DEFAULT_EMBED_COLOR,
+        common::{CATBOX_FOOTER_ICON, build_embed_author},
+        error::failed_embed_custom,
     },
-    utils::osu_utils::{format_join_date, get_flag_url, playtime_in_hours,
-        relative_timestamp,}
+    utils::{
+        CommaFormat, CommaFormatFloat,
+        osu_utils::{format_join_date, playtime_in_hours, relative_timestamp},
+    },
 };
 
 pub fn create(player: UserExtended) -> CreateEmbed {
@@ -57,26 +60,17 @@ pub fn create(player: UserExtended) -> CreateEmbed {
         .map(|f| format!("[{}](https://osu.ppy.sh/teams/{})", f.name, f.id))
         .unwrap_or(String::from("`none`"));
 
-    let embed_author = CreateEmbedAuthor::new("")
-        .name(format!(
-            "{player_name}: {pp}pp (#{global_rank} {country_code}{country_rank})"
-        ))
-        .url(format!(
-            "https://osu.ppy.sh/users/{}/osu",
-            player_name.clone()
-        ))
-        .icon_url(get_flag_url(country_code.to_string(), 256));
-
-    let description = format!(
-        "{}\n{}\n{}",
-        format!("Accuracy: `{acc}%` • Level: `{level}`"),
-        format!("Playtime: `{playtime}` • Playcount: `{playcount}`"),
-        format!("Medals: `{medal_count}` • Team: {team_linked_name}{peak_rank_with_timestamp}"),
+    let embed_author = build_embed_author(
+        &player_name, &pp, &global_rank, &country_code.to_string(), &country_rank,
     );
 
-    let embed_footer = CreateEmbedFooter::new("")
+    let description = format!(
+        "Accuracy: `{acc}%` • Level: `{level}`\nPlaytime: `{playtime}` • Playcount: `{playcount}`\nMedals: `{medal_count}` • Team: {team_linked_name}{peak_rank_with_timestamp}"
+    );
+
+    let embed_footer = serenity::all::CreateEmbedFooter::new("")
         .text(join_date)
-        .icon_url("https://files.catbox.moe/7kcm1a");
+        .icon_url(CATBOX_FOOTER_ICON);
 
     CreateEmbed::new()
         .color(DEFAULT_EMBED_COLOR)

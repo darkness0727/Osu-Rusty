@@ -1,12 +1,16 @@
-use rosu_v2::request::UserId;
-
 use crate::{
-    Context, Error, embeds::{
-        error::{FailedMapErr, account_not_linked, failed_embed, failed_embed_custom, failed_map, player_not_found_embed}, score::create,
-    }, utils::{
-        discord_utils::{check_reply_with_embed, reply_with_embed}, osu_utils::{
-            MAX_TOP_PLAY_COUNT, download_map_file, fetch_map, fetch_map_scores, fetch_mapset_from_diff, fetch_personal_bests, fetch_player, load_local_beatmap, parse_beatmap_url
-        }
+    Context, Error,
+    utils::command_helpers::{fetch_beatmap_or_reply, resolve_user_id, show_typing},
+    embeds::{
+        error::{FailedMapErr, account_not_linked, failed_embed_custom, failed_map},
+        score::create,
+    },
+    utils::{
+        discord_utils::{check_reply_with_embed, reply_with_embed},
+        osu_utils::{
+            fetch_map, fetch_map_scores, fetch_mapset_from_diff, fetch_personal_bests, fetch_player, parse_beatmap_url,
+            MAX_TOP_PLAY_COUNT,
+        },
     },
 };
 
@@ -24,11 +28,8 @@ pub async fn score(
     #[description = "Specify a map difficulty"] map: String,
     #[description = "Specify a user"] name: Option<String>,
 ) -> Result<(), Error> {
-    let db = &ctx.data().db;
-    let Some(user_id) = name
-        .map(UserId::from)
-        .or_else(|| db.get_user_id(ctx.author().id.get()).ok().flatten())
-    else {
+    show_typing(&ctx).await?;
+    let Some(user_id) = resolve_user_id(&ctx, name).await else {
         check_reply_with_embed(&ctx, account_not_linked()).await;
         return Ok(());
     };
@@ -54,15 +55,13 @@ pub async fn score(
     let player = match player_handle.await {
         Ok(Ok(player)) => player,
         _ => {
-            let embed = player_not_found_embed(user_id.to_string());
-            check_reply_with_embed(&ctx, embed).await;
+            check_reply_with_embed(&ctx, crate::embeds::error::player_not_found_embed(user_id.to_string())).await;
             return Ok(());
         }
     };
 
     let (Ok(Ok(map)), Ok(Ok(mapset))) = (map_handle.await, mapset_handle.await) else {
-        let err = String::from("Failed to fetch beatmap");
-        check_reply_with_embed(&ctx, failed_embed_custom(err)).await;
+        check_reply_with_embed(&ctx, failed_embed_custom(String::from("Failed to fetch beatmap"))).await;
         return Ok(());
     };
 
@@ -71,23 +70,15 @@ pub async fn score(
         _ => vec![],
     };
 
-    if let Err(err) = download_map_file(map_id).await {
-        tracing::error!("{err}");
-        check_reply_with_embed(&ctx, failed_embed()).await;
-        return Ok(());
-    }
-
-    let Ok(beatmap) = load_local_beatmap(map_id) else {
-        tracing::warn!("failed to parse or missing beatmap");
-        check_reply_with_embed(&ctx, failed_embed()).await;
+    let Some(beatmap) = fetch_beatmap_or_reply(&ctx, map_id).await else {
         return Ok(());
     };
 
-    let top_plays = top_plays_handle.await.ok().and_then(|t| t.ok()); 
+    let top_plays = top_plays_handle.await.ok().and_then(|t| t.ok());
 
-    let embed = create(player, scores, beatmap, map, mapset, top_plays); 
+    let embed = create(player, scores, beatmap, map, mapset, top_plays);
 
-    reply_with_embed(&ctx, embed.clone()).await?;
+    reply_with_embed(&ctx, embed).await?;
 
     Ok(())
 }

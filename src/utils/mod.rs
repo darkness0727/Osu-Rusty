@@ -4,10 +4,11 @@ use std::{fs::File, io::Write};
 use bytes::Bytes;
 use num_format::{Locale, ToFormattedString};
 
-pub mod discord_utils;
-pub mod osu_utils;
-pub mod osu_pp;
 pub mod database;
+pub mod discord_utils;
+pub mod command_helpers;
+pub mod osu_pp;
+pub mod osu_utils;
 
 pub fn save_file(bytes: Bytes, path: &str) -> Result<(), Error> {
     let mut file = File::create(path)?;

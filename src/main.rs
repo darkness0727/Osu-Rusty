@@ -1,5 +1,6 @@
+use std::sync::OnceLock;
+
 use ::serenity::all::ClientBuilder;
-use once_cell::sync::OnceCell;
 use poise::serenity_prelude as serenity;
 use rosu_v2::Osu;
 use serenity::prelude::*;
@@ -17,7 +18,7 @@ pub mod utils;
 type Error = Box<dyn std::error::Error + Send + Sync>;
 //type Context<'a> = poise::Context<'a, Data, Error>;
 
-pub static OSU_CLIENT: OnceCell<Osu> = OnceCell::new();
+pub static OSU_CLIENT: OnceLock<Osu> = OnceLock::new();
 use utils::database::UserDb;
 
 // Custom user data available to all commands
@@ -63,7 +64,7 @@ async fn start_discord_bot() {
     let options = poise::FrameworkOptions {
         commands: vec![profile(), recent(), top(), background(), score(), link(), unlink()],
         prefix_options: poise::PrefixFrameworkOptions {
-            prefix: Some("<".into()),
+            prefix: Some(dotenvy::var("BOT_PREFIX").expect("Missing `BOT_PREFIX` env var")),
             ..Default::default()
         },
         ..Default::default()
