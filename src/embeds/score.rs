@@ -155,13 +155,8 @@ pub fn create(
     );
 
     let embed_field_value = format!(
-        "{}\n{}",
-        format!(
-            "**{pp}**/{max_pp} PP • {formatted_hits} • **{score_combo}**/{map_combo}x {formatted_slider_stats}"
-        ),
-        format!(
-            "{nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` • {BPM_EMOJI} **{bpm}**\n\n"
-        )
+        "**{pp}**/{max_pp} PP • {formatted_hits} • **{score_combo}**/{map_combo}x {formatted_slider_stats}\n\
+         {nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` • {BPM_EMOJI} **{bpm}**\n\n"
     );
 
     let mut fields = vec![(embed_field_name, embed_field_value, false)];
@@ -221,7 +216,7 @@ fn other_scores_text(
         let acc = score.accuracy.two_decimal();
         let combo = score.max_combo;
         let timestamp = relative_timestamp(score.ended_at);
-        let tick_miss = format_slider_tick_misses(score, beatmap.clone()).unwrap_or_default();
+        let tick_miss = format_slider_tick_misses(score, beatmap).unwrap_or_default();
 
         let new_score = format!(
             "\n{grade} **+{mods}** [{stars}★] {pp}pp ({acc}%) {combo}x • {misses}{tick_miss} {timestamp}"

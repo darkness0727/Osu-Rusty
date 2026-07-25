@@ -298,8 +298,8 @@ pub fn format_slider_misses(score: &Score, map: &Beatmap) -> Option<String> {
     Some(format!("{tick_miss_text}{tail_miss_text}"))
 }
 
-pub fn format_slider_tick_misses(score: &Score, map: Beatmap) -> Option<String> {
-    let stats = slider_tail_tick_miss(score, &map)?;
+pub fn format_slider_tick_misses(score: &Score, map: &Beatmap) -> Option<String> {
+    let stats = slider_tail_tick_miss(score, map)?;
 
     let tick_miss = stats.tick_miss;
 

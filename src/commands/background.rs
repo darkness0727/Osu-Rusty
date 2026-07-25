@@ -28,17 +28,15 @@ pub async fn background(
         return Ok(());
     };
 
-    let url = if ids.map_id.is_some() {
-        let map_id = ids.map_id.unwrap();
-        println!("{map_id}");
+    let url = if let Some(map_id) = ids.map_id {
+        tracing::debug!("{map_id}");
         let Ok(Some(mapset)) = fetch_map(map_id).await.map(|m| m.mapset) else {
             let embed = failed_map(FailedMapErr::MapNotFound);
             check_reply_with_embed(&ctx, embed).await;
             return Ok(());
         };
         mapset.covers.card_2x
-    } else if ids.mapset_id.is_some() {
-        let mapset_id = ids.mapset_id.unwrap();
+    } else if let Some(mapset_id) = ids.mapset_id {
         let Ok(mapset) = fetch_mapset(mapset_id).await else {
             let embed = failed_map(FailedMapErr::MapNotFound);
             check_reply_with_embed(&ctx, embed).await;

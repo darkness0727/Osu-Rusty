@@ -137,13 +137,8 @@ pub fn create(
     );
 
     let embed_field_value = format!(
-        "{}\n{}",
-        format!(
-            "**{pp}**/{max_pp} PP • {formatted_hits} • **{score_combo}**/{map_combo}x {formatted_slider_stats}"
-        ),
-        format!(
-            "{nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` • {BPM_EMOJI} **{bpm}**"
-        )
+        "**{pp}**/{max_pp} PP • {formatted_hits} • **{score_combo}**/{map_combo}x {formatted_slider_stats}\n\
+         {nc_stats}`CS: {cs} AR: {ar} OD: {od} HP: {hp}` • `{song_length}` • {BPM_EMOJI} **{bpm}**"
     );
 
     let embed_footer = CreateEmbedFooter::new("")

@@ -29,6 +29,7 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
     _ = create_all_dir();
     osu_login().await;
     start_discord_bot().await;
@@ -71,7 +72,7 @@ async fn start_discord_bot() {
     let framework = poise::Framework::builder()
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
-                println!("Logged in as {}", _ready.user.name);
+                tracing::info!("Logged in as {}", _ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands)
                     .await
                     .unwrap();

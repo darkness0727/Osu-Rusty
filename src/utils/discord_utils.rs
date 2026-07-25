@@ -7,13 +7,13 @@ use serenity::{
 
 pub fn check_reply(result: SerenityResult<poise::ReplyHandle<'_>>) {
     if let Err(why) = result {
-        println!("Error sending message: {:?}", why);
+        tracing::error!("Error sending message: {:?}", why);
     }
 
 }
 pub fn check_edit(result: Result<(), serenity::Error>) {
     if let Err(why) = result {
-        println!("Error editing message: {:?}", why);
+        tracing::error!("Error editing message: {:?}", why);
     }
 }
 

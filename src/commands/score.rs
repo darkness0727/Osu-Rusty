@@ -72,13 +72,13 @@ pub async fn score(
     };
 
     if let Err(err) = download_map_file(map_id).await {
-        println!("{err}");
+        tracing::error!("{err}");
         check_reply_with_embed(&ctx, failed_embed()).await;
         return Ok(());
     }
 
     let Ok(beatmap) = load_local_beatmap(map_id) else {
-        println!("failed to parse or missing beatmap");
+        tracing::warn!("failed to parse or missing beatmap");
         check_reply_with_embed(&ctx, failed_embed()).await;
         return Ok(());
     };
