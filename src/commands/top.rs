@@ -1,6 +1,6 @@
 use crate::{
     Context, Error,
-    utils::command_helpers::{fetch_beatmap_or_reply, fetch_player_or_reply, resolve_user_id, show_typing},
+    utils::command_helpers::{fetch_beatmap_or_reply, fetch_player_or_reply, resolve_user_id},
     embeds::{
         error::{account_not_linked, not_enough_scores},
         recent::create,
@@ -25,7 +25,6 @@ pub async fn top(
     #[description = "Specify which score"] index: usize,
     #[description = "Specify a user"] name: Option<String>,
 ) -> Result<(), Error> {
-    show_typing(&ctx).await?;
     let Some(user_id) = resolve_user_id(&ctx, name).await else {
         check_reply_with_embed(&ctx, account_not_linked()).await;
         return Ok(());

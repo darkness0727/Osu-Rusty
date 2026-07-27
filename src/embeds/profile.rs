@@ -61,7 +61,7 @@ pub fn create(player: UserExtended) -> CreateEmbed {
         .unwrap_or(String::from("`none`"));
 
     let embed_author = build_embed_author(
-        &player_name, &pp, &global_rank, &country_code.to_string(), &country_rank,
+        &player_name, &pp, &global_rank, country_code.as_ref(), &country_rank,
     );
 
     let description = format!(

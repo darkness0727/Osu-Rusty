@@ -1,6 +1,6 @@
 use crate::{
     Context, Error,
-    utils::command_helpers::{fetch_beatmap_or_reply, resolve_user_id, show_typing},
+    utils::command_helpers::{fetch_beatmap_or_reply, resolve_user_id},
     embeds::{
         error::{FailedMapErr, account_not_linked, failed_embed_custom, failed_map},
         score::create,
@@ -28,7 +28,6 @@ pub async fn score(
     #[description = "Specify a map difficulty"] map: String,
     #[description = "Specify a user"] name: Option<String>,
 ) -> Result<(), Error> {
-    show_typing(&ctx).await?;
     let Some(user_id) = resolve_user_id(&ctx, name).await else {
         check_reply_with_embed(&ctx, account_not_linked()).await;
         return Ok(());

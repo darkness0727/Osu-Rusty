@@ -2,7 +2,6 @@ use crate::{
     Context, Error,
     embeds::error::{FailedMapErr, failed_embed_custom, failed_map},
     utils::{
-        command_helpers::show_typing,
         discord_utils::{check_reply, check_reply_with_embed},
         osu_utils::{fetch_map, fetch_mapset, parse_beatmap_url},
     },
@@ -22,7 +21,6 @@ pub async fn background(
     ctx: Context<'_>,
     #[description = "Specify a map#"] map: String,
 ) -> Result<(), Error> {
-    show_typing(&ctx).await?;
     let ids = parse_beatmap_url(&map);
     if ids.map_id.is_none() && ids.mapset_id.is_none() {
         let embed = failed_embed_custom(String::from("Invalid Beatmap URL"));
