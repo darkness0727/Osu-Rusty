@@ -36,10 +36,10 @@ pub fn not_enough_scores(name: String, length: usize, only_passes: bool) -> Crea
 
 pub fn failed_map(fail_type: FailedMapErr) -> CreateEmbed {
     let err = match fail_type {
-        FailedMapErr::FailedUrlParse => "Invalid beatmap URL",
-        FailedMapErr::MapNotFound => "Map not found",
-        FailedMapErr::SetNotFound => "Mapset not found",
-        FailedMapErr::ExpectedDifficulty => "Expected a map difficulty, found mapset"
+        FailedMapErr::FailedUrlParse => "Invalid specfied Beatmap URL or last Beatmap URL in channel",
+        FailedMapErr::MapNotFound => "Specfied Beatmap or last beatmap in channel not found",
+        FailedMapErr::SetNotFound => "Specfied Beatmapset or last Beatmapset in channel not found",
+        FailedMapErr::ExpectedDifficulty => "Expected a map difficulty, found mapset\nfrom specfied beatmap or last beatmap in channel"
     }.to_string();
     
     failed_embed_custom(err)

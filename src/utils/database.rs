@@ -1,6 +1,8 @@
 use redb::{Database, Error, ReadableDatabase, TableDefinition};
 use rosu_v2::request::UserId;
-use std::sync::Arc;
+use serenity::all::ChannelId;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 // Define the table schema: Discord User ID (u64) -> osu! User ID (u32)
 const USER_ID_TABLE: TableDefinition<u64, u32> = TableDefinition::new("osu_users_by_id");
@@ -67,6 +69,31 @@ impl UserDb {
         let removed_name = write_txn.open_table(USER_NAME_TABLE)?.remove(discord_id)?.is_some();
         write_txn.commit()?;
         Ok(removed_id || removed_name)
+    }
+}
+
+#[derive(Clone)]
+pub struct ChannelMapDb {
+    maps: Arc<Mutex<HashMap<ChannelId, String>>>,
+}
+
+impl ChannelMapDb {
+    pub fn new() -> Self {
+        Self {
+            maps: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn set_channel_map(&self, channel_id: ChannelId, map_url: String) {
+        self.maps.lock().unwrap().insert(channel_id, map_url);
+    }
+
+    pub fn get_channel_map(&self, channel_id: ChannelId) -> Option<String> {
+        self.maps.lock().unwrap().get(&channel_id).cloned()
+    }
+
+    pub fn remove_channel_map(&self, channel_id: ChannelId) -> bool {
+        self.maps.lock().unwrap().remove(&channel_id).is_some()
     }
 }
 

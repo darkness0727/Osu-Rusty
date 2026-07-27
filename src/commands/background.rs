@@ -19,16 +19,24 @@ use poise::say_reply;
 )]
 pub async fn background(
     ctx: Context<'_>,
-    #[description = "Specify a map#"] map: String,
+    #[description = "Specify a map#"] map: Option<String>,
 ) -> Result<(), Error> {
-    let ids = parse_beatmap_url(&map);
-    if ids.map_id.is_none() && ids.mapset_id.is_none() {
+    let parse_result = parse_beatmap_url(
+        &map.unwrap_or(
+            ctx.data()
+                .channel_map_db
+                .get_channel_map(ctx.channel_id())
+                .unwrap_or_default(),
+        ),
+    );
+
+    if parse_result.map_id.is_none() && parse_result.mapset_id.is_none() {
         let embed = failed_embed_custom(String::from("Invalid Beatmap URL"));
         check_reply_with_embed(&ctx, embed).await;
         return Ok(());
     };
 
-    if let Some(map_id) = ids.map_id {
+    if let Some(map_id) = parse_result.map_id {
         tracing::debug!("{map_id}");
         let Ok(Some(mapset)) = fetch_map(map_id).await.map(|m| m.mapset) else {
             check_reply_with_embed(&ctx, failed_map(FailedMapErr::MapNotFound)).await;
@@ -38,7 +46,7 @@ pub async fn background(
         return Ok(());
     }
 
-    if let Some(mapset_id) = ids.mapset_id {
+    if let Some(mapset_id) = parse_result.mapset_id {
         let Ok(mapset) = fetch_mapset(mapset_id).await else {
             check_reply_with_embed(&ctx, failed_map(FailedMapErr::MapNotFound)).await;
             return Ok(());
