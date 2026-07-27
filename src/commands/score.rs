@@ -1,7 +1,7 @@
 use crate::{
     Context, Error,
     embeds::{
-        error::{FailedMapErr, account_not_linked, failed_embed_custom, failed_map},
+        error::{FailedMapErr, account_not_linked, failed_map},
         score::create,
     },
     utils::command_helpers::{fetch_beatmap_or_reply, resolve_user_id},
