@@ -2,22 +2,13 @@ use rosu_pp::Beatmap;
 use rosu_v2::{prelude::UserExtended, request::UserId};
 
 use crate::{
-    Context, Error,
+    Context,
     embeds::error::{failed_embed, player_not_found_embed},
     utils::{
         discord_utils::check_reply_with_embed,
         osu_utils::{download_map_file, load_local_beatmap},
     },
 };
-
-pub async fn show_typing(ctx: &Context<'_>) -> Result<(), Error> {
-    if !ctx.prefix().is_empty() {
-        ctx.channel_id()
-            .broadcast_typing(ctx.serenity_context())
-            .await?;
-    }
-    Ok(())
-}
 
 pub async fn resolve_user_id(ctx: &Context<'_>, name: Option<String>) -> Option<UserId> {
     let db = &ctx.data().db;

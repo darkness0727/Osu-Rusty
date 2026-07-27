@@ -6,7 +6,16 @@ use rosu_v2::Osu;
 use serenity::prelude::*;
 
 use crate::{
-    commands::{background::background, link::{link, unlink}, profile::profile, recent::recent, score::score, top::top}, resource_handler::create_all_dir, utils::{command_helpers::show_typing, osu_utils::login},
+    commands::{
+        background::background,
+        link::{link, unlink},
+        profile::profile,
+        recent::recent,
+        score::score,
+        top::top,
+    },
+    resource_handler::create_all_dir,
+    utils::osu_utils::login,
 };
 
 mod commands;
@@ -62,14 +71,28 @@ async fn start_discord_bot() {
         | GatewayIntents::MESSAGE_CONTENT;
 
     let options = poise::FrameworkOptions {
-        commands: vec![profile(), recent(), top(), background(), score(), link(), unlink()],
+        commands: vec![
+            profile(),
+            recent(),
+            top(),
+            background(),
+            score(),
+            link(),
+            unlink(),
+        ],
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some(dotenvy::var("BOT_PREFIX").expect("Missing `BOT_PREFIX` env var")),
             ..Default::default()
         },
         pre_command: |ctx| {
             Box::pin(async move {
-                _ = show_typing(&ctx).await;
+                // show typing for prefix commands
+                if matches!(ctx, poise::Context::Prefix(_)) {
+                    _ = ctx
+                        .channel_id()
+                        .broadcast_typing(ctx.serenity_context())
+                        .await;
+                }
             })
         },
         ..Default::default()
