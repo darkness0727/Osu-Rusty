@@ -6,10 +6,8 @@ use serenity::all::CreateEmbed;
 
 use crate::{
     embeds::{
-        common::compute_score_embed_parts,
-        error::failed_embed_custom,
-    },
-    utils::{
+        common::compute_score_embed_parts, error::{failed_embed_custom, no_scores_found},
+    }, utils::{
         CommaFormatFloat,
         osu_pp::{cal_score_perf, is_fc, pb_index_id_match},
         osu_utils::{
@@ -28,7 +26,7 @@ pub fn create(
     top_plays: Option<Vec<Score>>,
 ) -> CreateEmbed {
     let Some((score, other_scores)) = highest_pp_score(scores) else {
-        return failed_embed_custom(String::from("No scores found"));
+        return no_scores_found();
     };
     let score = &score;
 
