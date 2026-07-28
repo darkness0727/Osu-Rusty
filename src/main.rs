@@ -127,7 +127,7 @@ async fn start_discord_bot() {
                     .unwrap();
                 Ok(Data {
                     db,
-                    channel_map_db: ChannelMapDb::new(),
+                    channel_map_db: ChannelMapDb::new(ctx.clone()),
                 })
             })
         })

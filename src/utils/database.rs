@@ -2,11 +2,11 @@ use redb::{Database, Error, ReadableDatabase, TableDefinition};
 use rosu_v2::request::UserId;
 use serenity::all::ChannelId;
 use serenity::builder::GetMessages;
+use serenity::client::Context;
 use serenity::model::id::MessageId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::Context;
 use crate::utils::osu_utils::map_url_from_msg;
 
 // Define the table schema: Discord User ID (u64) -> osu! User ID (u32)
@@ -87,13 +87,15 @@ impl UserDb {
 pub struct ChannelMapDb {
     maps: Arc<Mutex<HashMap<ChannelId, String>>>,
     first_checked_msg: Arc<Mutex<HashMap<ChannelId, MessageId>>>,
+    ctx: Context,
 }
 
 impl ChannelMapDb {
-    pub fn new() -> Self {
+    pub fn new(ctx: Context) -> Self {
         Self {
             maps: Arc::new(Mutex::new(HashMap::new())),
             first_checked_msg: Arc::new(Mutex::new(HashMap::new())),
+            ctx,
         }
     }
 
@@ -119,12 +121,10 @@ impl ChannelMapDb {
     pub async fn get_channel_map(
         &self,
         channel_id: ChannelId,
-        ctx: Option<&Context<'_>>,
     ) -> Option<String> {
         if let Some(map_url) = self.maps.lock().unwrap().get(&channel_id) {
             return Some(map_url.to_string());
         };
-        let ctx = ctx?;
 
         let last_checked_msg_id = self
             .first_checked_msg
@@ -137,7 +137,7 @@ impl ChannelMapDb {
             .map(|msg_id| GetMessages::new().before(msg_id).limit(50))
             .unwrap_or(GetMessages::new().limit(50));
 
-        let msgs = ctx.channel_id().messages(&ctx, builder).await.ok()?;
+        let msgs = channel_id.messages(&self.ctx, builder).await.ok()?;
 
         if msgs.is_empty() {
             return None;
@@ -157,11 +157,7 @@ impl ChannelMapDb {
     }
 }
 
-impl Default for ChannelMapDb {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
 
 #[cfg(test)]
 mod tests {

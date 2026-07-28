@@ -37,7 +37,7 @@ pub async fn score(
         &map.unwrap_or(
             ctx.data()
                 .channel_map_db
-                .get_channel_map(ctx.channel_id(), Some(&ctx))
+                .get_channel_map(ctx.channel_id())
                 .await
                 .unwrap_or_default(),
         ),
