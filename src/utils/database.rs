@@ -1,8 +1,13 @@
 use redb::{Database, Error, ReadableDatabase, TableDefinition};
 use rosu_v2::request::UserId;
 use serenity::all::ChannelId;
+use serenity::builder::GetMessages;
+use serenity::model::id::MessageId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+
+use crate::Context;
+use crate::utils::osu_utils::map_url_from_msg;
 
 // Define the table schema: Discord User ID (u64) -> osu! User ID (u32)
 const USER_ID_TABLE: TableDefinition<u64, u32> = TableDefinition::new("osu_users_by_id");
@@ -65,8 +70,14 @@ impl UserDb {
     /// Remove a user's link if they want to unlink
     pub fn remove_user_id(&self, discord_id: u64) -> Result<bool, Error> {
         let write_txn = self.db.begin_write()?;
-        let removed_id = write_txn.open_table(USER_ID_TABLE)?.remove(discord_id)?.is_some();
-        let removed_name = write_txn.open_table(USER_NAME_TABLE)?.remove(discord_id)?.is_some();
+        let removed_id = write_txn
+            .open_table(USER_ID_TABLE)?
+            .remove(discord_id)?
+            .is_some();
+        let removed_name = write_txn
+            .open_table(USER_NAME_TABLE)?
+            .remove(discord_id)?
+            .is_some();
         write_txn.commit()?;
         Ok(removed_id || removed_name)
     }
@@ -75,25 +86,80 @@ impl UserDb {
 #[derive(Clone)]
 pub struct ChannelMapDb {
     maps: Arc<Mutex<HashMap<ChannelId, String>>>,
+    first_checked_msg: Arc<Mutex<HashMap<ChannelId, MessageId>>>,
 }
 
 impl ChannelMapDb {
     pub fn new() -> Self {
         Self {
             maps: Arc::new(Mutex::new(HashMap::new())),
+            first_checked_msg: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    pub fn set_channel_map(&self, channel_id: ChannelId, map_url: String) {
+    pub fn set_channel_map(
+        &self,
+        channel_id: ChannelId,
+        map_url: String,
+        msg_id: Option<MessageId>,
+    ) {
         self.maps.lock().unwrap().insert(channel_id, map_url);
+        if self
+            .first_checked_msg
+            .lock()
+            .unwrap()
+            .get(&channel_id)
+            .is_none()
+            && let Some(msg_id) = msg_id
+        {
+            self.set_last_checked_msg(channel_id, msg_id);
+        }
     }
 
-    pub fn get_channel_map(&self, channel_id: ChannelId) -> Option<String> {
-        self.maps.lock().unwrap().get(&channel_id).cloned()
+    pub async fn get_channel_map(
+        &self,
+        channel_id: ChannelId,
+        ctx: Option<&Context<'_>>,
+    ) -> Option<String> {
+        if let Some(map_url) = self.maps.lock().unwrap().get(&channel_id) {
+            return Some(map_url.to_string());
+        };
+        let ctx = ctx?;
+
+        let last_checked_msg_id = self
+            .first_checked_msg
+            .lock()
+            .unwrap()
+            .get(&channel_id)
+            .cloned();
+
+        let builder = last_checked_msg_id
+            .map(|msg_id| GetMessages::new().before(msg_id).limit(50))
+            .unwrap_or(GetMessages::new().limit(50));
+
+        let msgs = ctx.channel_id().messages(&ctx, builder).await.ok()?;
+
+        if msgs.is_empty() {
+            return None;
+        }
+
+        let url = msgs.iter().find_map(map_url_from_msg);
+
+        self.set_last_checked_msg(channel_id, msgs.last().unwrap().id);
+        url
     }
 
-    pub fn remove_channel_map(&self, channel_id: ChannelId) -> bool {
-        self.maps.lock().unwrap().remove(&channel_id).is_some()
+    fn set_last_checked_msg(&self, channel_id: ChannelId, msg_id: MessageId) {
+        self.first_checked_msg
+            .lock()
+            .unwrap()
+            .insert(channel_id, msg_id);
+    }
+}
+
+impl Default for ChannelMapDb {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

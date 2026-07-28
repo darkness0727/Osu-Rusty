@@ -25,7 +25,8 @@ pub async fn background(
         &map.unwrap_or(
             ctx.data()
                 .channel_map_db
-                .get_channel_map(ctx.channel_id())
+                .get_channel_map(ctx.channel_id(), Some(&ctx))
+                .await
                 .unwrap_or_default(),
         ),
     );

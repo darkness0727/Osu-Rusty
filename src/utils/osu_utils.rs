@@ -1,9 +1,7 @@
 use std::{collections::HashMap, sync::{LazyLock, Mutex}, time::Duration};
 
 use crate::{
-    Error, OSU_CLIENT,
-    resource_handler::{ResourceCategory, get_resource_path, save_resource},
-    utils::osu_pp::slider_tail_tick_miss,
+    Error, OSU_CLIENT, OSU_URL_RE, resource_handler::{ResourceCategory, get_resource_path, save_resource}, utils::osu_pp::slider_tail_tick_miss,
 };
 use num_traits::clamp_min;
 use regex::Regex;
@@ -12,6 +10,7 @@ use rosu_pp::Beatmap;
 use rosu_v2::{
     error::OsuError, model::Grade, prelude::{BeatmapExtended, BeatmapsetExtended, Score, UserExtended}, request::UserId,
 };
+use serenity::model::channel::Message;
 use time::{OffsetDateTime, format_description};
 use timeago::Formatter;
 
@@ -240,6 +239,46 @@ pub fn parse_beatmap_url(s: &str) -> ParsedUrlResult {
             }
 
     ParsedUrlResult { mapset_id, map_id }
+}
+
+pub fn map_url_from_msg(message: &Message) -> Option<String> {
+    let has_osu_url = message.content.to_lowercase().contains("osu.ppy.sh")
+        || message.embeds.iter().any(|embed| {
+            embed
+                .url
+                .as_deref()
+                .is_some_and(|u| u.contains("osu.ppy.sh"))
+                || embed
+                    .description
+                    .as_deref()
+                    .is_some_and(|d| d.contains("osu.ppy.sh"))
+        });
+
+    if !has_osu_url {
+        return None;
+    }
+
+    let re = OSU_URL_RE.get_or_init(|| regex::Regex::new(r"https?://osu\.ppy\.sh/[^\s]+").unwrap());
+
+    
+
+    re
+        .find(&message.content)
+        .map(|m| m.as_str().to_string())
+        .or_else(|| {
+            message.embeds.iter().find_map(|embed| {
+                embed
+                    .url
+                    .as_deref()
+                    .and_then(|url| re.find(url).map(|m| m.as_str().to_string()))
+                    .or_else(|| {
+                        embed
+                            .description
+                            .as_deref()
+                            .and_then(|desc| re.find(desc).map(|m| m.as_str().to_string()))
+                    })
+            })
+        })
 }
 
 /// ALSO written by ChatGPT rest in peace

@@ -37,7 +37,8 @@ pub async fn score(
         &map.unwrap_or(
             ctx.data()
                 .channel_map_db
-                .get_channel_map(ctx.channel_id())
+                .get_channel_map(ctx.channel_id(), Some(&ctx))
+                .await
                 .unwrap_or_default(),
         ),
     );
@@ -74,11 +75,7 @@ pub async fn score(
     };
 
     let (Ok(Ok(map)), Ok(Ok(mapset))) = (map_handle.await, mapset_handle.await) else {
-        check_reply_with_embed(
-            &ctx,
-            failed_map(FailedMapErr::MapNotFound),
-        )
-        .await;
+        check_reply_with_embed(&ctx, failed_map(FailedMapErr::MapNotFound)).await;
         return Ok(());
     };
 

@@ -13,9 +13,7 @@ use crate::{
         recent::recent,
         score::score,
         top::top,
-    },
-    resource_handler::create_all_dir,
-    utils::osu_utils::login,
+    }, resource_handler::create_all_dir, utils::osu_utils::{login, map_url_from_msg},
 };
 
 mod commands;
@@ -67,51 +65,13 @@ async fn event_handler(
     _framework: poise::FrameworkContext<'_, Data, Error>,
     data: &Data,
 ) -> Result<(), Error> {
-    match event {
-        serenity::FullEvent::Message { new_message: msg } => {
-            // return early if message doesnt contain osu urls to save processing
-            let has_osu_url = msg.content.to_lowercase().contains("osu.ppy.sh")
-                || msg.embeds.iter().any(|embed| {
-                    embed.url.as_deref().is_some_and(|u| u.contains("osu.ppy.sh"))
-                        || embed
-                            .description
-                            .as_deref()
-                            .is_some_and(|d| d.contains("osu.ppy.sh"))
-                });
+    if let serenity::FullEvent::Message { new_message: msg } = event {
+        let Some(map_url) = map_url_from_msg(msg) else {
+            return Ok(());
+        };
 
-            if !has_osu_url {
-                return Ok(());
-            }
-
-            let re = OSU_URL_RE.get_or_init(|| {
-                regex::Regex::new(r"https?://osu\.ppy\.sh/[^\s]+").unwrap()
-            });
-
-            let map_url = re
-                .find(&msg.content)
-                .map(|m| m.as_str().to_string())
-                .or_else(|| {
-                    msg.embeds.iter().find_map(|embed| {
-                        embed
-                            .url
-                            .as_deref()
-                            .and_then(|url| re.find(url).map(|m| m.as_str().to_string()))
-                            .or_else(|| {
-                                embed.description.as_deref().and_then(|desc| {
-                                    re.find(desc).map(|m| m.as_str().to_string())
-                                })
-                            })
-                    })
-                });
-
-            let Some(map_url) = map_url else {
-                return Ok(());
-            };
-
-            data.channel_map_db
-                .set_channel_map(msg.channel_id, map_url);
-        }
-        _ => {}
+        data.channel_map_db
+            .set_channel_map(msg.channel_id, map_url, Some(msg.id));
     }
     Ok(())
 }
